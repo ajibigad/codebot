@@ -1,8 +1,23 @@
 """Utility functions for codebot."""
 
 import hashlib
+import os
 import uuid
-from typing import Optional
+from typing import Dict, Optional
+
+
+def get_git_env() -> Dict[str, str]:
+    """
+    Get git environment variables for non-interactive operation.
+    
+    Returns:
+        Dictionary of environment variables for git operations
+    """
+    return {
+        **os.environ,
+        "GIT_TERMINAL_PROMPT": "0",  # Disable terminal prompts
+        "GIT_ASKPASS": "echo",       # Use echo as askpass (returns empty)
+    }
 
 
 def generate_short_uuid() -> str:

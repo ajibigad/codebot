@@ -1,8 +1,11 @@
 """Git operations for committing and pushing changes."""
 
+import os
 import subprocess
 from pathlib import Path
 from typing import Optional
+
+from codebot.utils import get_git_env
 
 
 class GitOps:
@@ -17,6 +20,10 @@ class GitOps:
         """
         self.work_dir = work_dir
     
+    def _get_git_env(self) -> dict:
+        """Get git environment variables for non-interactive operation."""
+        return get_git_env()
+    
     def commit_changes(self, message: str) -> None:
         """
         Commit all changes with the given message.
@@ -24,12 +31,15 @@ class GitOps:
         Args:
             message: Commit message
         """
+        env = self._get_git_env()
+        
         # Stage all changes
         result = subprocess.run(
             ["git", "add", "-A"],
             cwd=self.work_dir,
             capture_output=True,
             text=True,
+            env=env,
         )
         
         if result.returncode != 0:
@@ -41,6 +51,7 @@ class GitOps:
             cwd=self.work_dir,
             capture_output=True,
             text=True,
+            env=env,
         )
         
         if result.returncode != 0:
@@ -55,12 +66,15 @@ class GitOps:
         Args:
             branch_name: Name of the branch to push
         """
+        env = self._get_git_env()
+        
         # Push branch to remote
         result = subprocess.run(
             ["git", "push", "-u", "origin", branch_name],
             cwd=self.work_dir,
             capture_output=True,
             text=True,
+            env=env,
         )
         
         if result.returncode != 0:
@@ -75,11 +89,14 @@ class GitOps:
         Returns:
             True if there are uncommitted changes, False otherwise
         """
+        env = self._get_git_env()
+        
         result = subprocess.run(
             ["git", "status", "--porcelain"],
             cwd=self.work_dir,
             capture_output=True,
             text=True,
+            env=env,
         )
         
         return result.stdout.strip() != ""
@@ -91,11 +108,14 @@ class GitOps:
         Returns:
             Commit hash or None if no commits exist
         """
+        env = self._get_git_env()
+        
         result = subprocess.run(
             ["git", "rev-parse", "HEAD"],
             cwd=self.work_dir,
             capture_output=True,
             text=True,
+            env=env,
         )
         
         if result.returncode == 0:
@@ -110,11 +130,14 @@ class GitOps:
         Returns:
             Branch name or None if no branch is checked out
         """
+        env = self._get_git_env()
+        
         result = subprocess.run(
             ["git", "rev-parse", "--abbrev-ref", "HEAD"],
             cwd=self.work_dir,
             capture_output=True,
             text=True,
+            env=env,
         )
         
         if result.returncode == 0:

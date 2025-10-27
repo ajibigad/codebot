@@ -1,11 +1,12 @@
 """Environment manager for isolated development environments."""
 
+import os
 import subprocess
 from pathlib import Path
 from typing import Optional, Tuple
 
 from codebot.models import TaskPrompt
-from codebot.utils import generate_branch_name, generate_directory_name
+from codebot.utils import generate_branch_name, generate_directory_name, get_git_env
 
 
 class EnvironmentManager:
@@ -80,10 +81,14 @@ class EnvironmentManager:
         else:
             print(f"Cloning repository: {repo_url}")
         
+        # Configure git environment for non-interactive operation
+        env = get_git_env()
+        
         result = subprocess.run(
             ["git", "clone", repo_url, str(self.work_dir)],
             capture_output=True,
             text=True,
+            env=env,
         )
         
         if result.returncode != 0:
@@ -98,12 +103,16 @@ class EnvironmentManager:
         Returns:
             Name of the default branch (main or master)
         """
+        # Configure git environment for non-interactive operation
+        env = get_git_env()
+        
         # Try to get the default branch from remote
         result = subprocess.run(
             ["git", "remote", "show", "origin"],
             cwd=self.work_dir,
             capture_output=True,
             text=True,
+            env=env,
         )
         
         if result.returncode == 0:
@@ -117,6 +126,7 @@ class EnvironmentManager:
             cwd=self.work_dir,
             capture_output=True,
             text=True,
+            env=env,
         )
         
         if result.returncode == 0:
@@ -131,11 +141,15 @@ class EnvironmentManager:
     
     def _checkout_branch(self, branch_name: str) -> None:
         """Checkout the specified branch."""
+        # Configure git environment for non-interactive operation
+        env = get_git_env()
+        
         result = subprocess.run(
             ["git", "checkout", branch_name],
             cwd=self.work_dir,
             capture_output=True,
             text=True,
+            env=env,
         )
         
         if result.returncode != 0:
@@ -145,11 +159,15 @@ class EnvironmentManager:
     
     def _create_branch(self, branch_name: str) -> None:
         """Create and checkout a new branch."""
+        # Configure git environment for non-interactive operation
+        env = get_git_env()
+        
         result = subprocess.run(
             ["git", "checkout", "-b", branch_name],
             cwd=self.work_dir,
             capture_output=True,
             text=True,
+            env=env,
         )
         
         if result.returncode != 0:
