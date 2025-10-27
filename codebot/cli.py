@@ -88,21 +88,26 @@ def main(
     
     work_base_dir.mkdir(parents=True, exist_ok=True)
     
-    # Validate GitHub token if provided
-    if github_token:
+    # Get GitHub token from flag, environment variable, or .env file
+    effective_token = github_token or os.getenv("GITHUB_TOKEN")
+    
+    # Validate GitHub token if available
+    if effective_token:
         print("Validating GitHub token...")
-        if not validate_github_token(github_token):
+        if not validate_github_token(effective_token):
             click.echo("Error: Invalid GitHub token. Please check your token and try again.", err=True)
             click.echo("Make sure your token has the correct permissions (repo access for private repos).", err=True)
             sys.exit(1)
         print("GitHub token validated successfully")
+    else:
+        print("Warning: No GitHub token found. This may cause issues with private repositories.")
     
     # Create and run orchestrator
     try:
         orchestrator = Orchestrator(
             task=task,
             work_base_dir=work_base_dir,
-            github_token=github_token,
+            github_token=effective_token,
         )
         orchestrator.run()
     except KeyboardInterrupt:

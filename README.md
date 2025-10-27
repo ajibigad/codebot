@@ -102,6 +102,12 @@ You can also create a `.env` file in your project directory with:
 GITHUB_TOKEN=your_github_token_here
 ```
 
+**GitHub Token Requirements:**
+- For private repositories: Token needs `repo` scope (classic tokens) or `Contents: Read/Write` and `Pull requests: Write` (fine-grained tokens)
+- For public repositories: Token needs `public_repo` scope or `Contents: Write` and `Pull requests: Write`
+- Token is validated before use to prevent authentication failures
+- Credentials are only embedded temporarily during clone, then removed for security
+
 ## How It Works
 
 1. **Parse Task Prompt**: Reads and validates the task prompt

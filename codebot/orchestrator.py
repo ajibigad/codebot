@@ -1,5 +1,6 @@
 """Main orchestrator for codebot tasks."""
 
+import os
 import sys
 from pathlib import Path
 from typing import Optional
@@ -31,7 +32,7 @@ class Orchestrator:
         """
         self.task = task
         self.work_base_dir = work_base_dir
-        self.github_token = github_token
+        self.github_token = github_token or os.getenv("GITHUB_TOKEN")
         
         self.env_manager: Optional[EnvironmentManager] = None
         self.claude_runner: Optional[ClaudeRunner] = None
