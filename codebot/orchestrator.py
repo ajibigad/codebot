@@ -239,13 +239,43 @@ class Orchestrator:
     
     def _create_pr(self) -> Optional[str]:
         """Create GitHub pull request."""
-        if not self.env_manager:
+        if not self.env_manager or not self.work_dir:
             return None
         
         self.github_pr = GitHubPR(self.github_token)
         
+        # Get commit message from the latest commit
+        commit_message = None
+        if self.git_ops:
+            commit_message = self.git_ops.get_latest_commit_hash()
+            if commit_message:
+                result = subprocess.run(
+                    ["git", "log", "-1", "--pretty=format:%B"],
+                    cwd=self.work_dir,
+                    capture_output=True,
+                    text=True,
+                )
+                if result.returncode == 0:
+                    commit_message = result.stdout.strip()
+        
+        # Get files changed
+        files_changed = None
+        if self.git_ops:
+            result = subprocess.run(
+                ["git", "diff", "--name-status", "HEAD~1", "HEAD"],
+                cwd=self.work_dir,
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                files_changed = result.stdout.strip()
+        
         title = self.github_pr.generate_pr_title(self.task)
-        body = self.github_pr.generate_pr_body(self.task)
+        body = self.github_pr.generate_pr_body(
+            self.task,
+            commit_message=commit_message,
+            files_changed=files_changed,
+        )
         
         pr_data = self.github_pr.create_pull_request(
             repository_url=self.task.repository_url,
