@@ -67,6 +67,78 @@ class EnvironmentManager:
         
         return self.work_dir
     
+    def reuse_workspace(self, work_dir: Path, branch_name: str, repo_url: str) -> Path:
+        """
+        Reuse an existing workspace and update it to latest remote state.
+        
+        Args:
+            work_dir: Path to existing workspace
+            branch_name: Branch name to checkout
+            repo_url: Repository URL for authentication
+            
+        Returns:
+            Path to the working directory
+        """
+        self.work_dir = work_dir
+        self.branch_name = branch_name
+        self.task.repository_url = repo_url
+        
+        print(f"Reusing workspace: {self.work_dir}")
+        print(f"Updating branch: {branch_name}")
+        
+        # Update workspace to latest remote state
+        self._update_workspace()
+        
+        return self.work_dir
+    
+    def _update_workspace(self) -> None:
+        """Update workspace to latest remote state."""
+        if not self.work_dir:
+            return
+        
+        env = get_git_env()
+        
+        # Fetch latest from remote
+        print("Fetching latest changes from remote...")
+        result = subprocess.run(
+            ["git", "fetch", "origin"],
+            cwd=self.work_dir,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        
+        if result.returncode != 0:
+            print(f"Warning: Failed to fetch from remote: {result.stderr}")
+        
+        # Checkout the branch
+        print(f"Checking out branch: {self.branch_name}")
+        result = subprocess.run(
+            ["git", "checkout", self.branch_name],
+            cwd=self.work_dir,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        
+        if result.returncode != 0:
+            raise RuntimeError(f"Failed to checkout branch: {result.stderr}")
+        
+        # Pull latest changes
+        print("Pulling latest changes...")
+        result = subprocess.run(
+            ["git", "pull", "origin", self.branch_name],
+            cwd=self.work_dir,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        
+        if result.returncode != 0:
+            print(f"Warning: Failed to pull latest changes: {result.stderr}")
+        
+        print("Workspace updated successfully")
+    
     def _clone_repository(self) -> None:
         """Clone the repository into the work directory."""
         # Prepare repository URL with authentication if token is available

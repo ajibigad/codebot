@@ -144,3 +144,28 @@ class GitOps:
             return result.stdout.strip()
         
         return None
+    
+    def get_commit_message(self, commit_hash: str) -> str:
+        """
+        Get the commit message for a specific commit.
+        
+        Args:
+            commit_hash: Commit hash
+            
+        Returns:
+            Commit message
+        """
+        env = self._get_git_env()
+        
+        result = subprocess.run(
+            ["git", "log", "-1", "--pretty=%B", commit_hash],
+            cwd=self.work_dir,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        
+        if result.returncode != 0:
+            raise RuntimeError(f"Failed to get commit message: {result.stderr}")
+        
+        return result.stdout.strip()

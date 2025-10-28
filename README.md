@@ -40,12 +40,24 @@ Follow the instructions at [Anthropic's Claude Code Documentation](https://www.a
 
 ### Basic Usage
 
+#### Running Tasks
+
 ```bash
 # Using a task prompt file
-codebot --task-prompt-file task.yaml
+codebot run --task-prompt-file task.yaml
 
 # Using inline task prompt (JSON)
-codebot --task-prompt '{"repository_url": "https://github.com/user/repo.git", "description": "Fix bug"}'
+codebot run --task-prompt '{"repository_url": "https://github.com/user/repo.git", "description": "Fix bug"}'
+```
+
+#### Starting Webhook Server for PR Review Comments
+
+```bash
+# Start webhook server
+codebot serve --port 5000
+
+# With custom work directory
+codebot serve --port 5000 --work-dir /path/to/workspaces
 ```
 
 ### Task Prompt Format
@@ -96,10 +108,12 @@ Options:
 ### Environment Variables
 
 - `GITHUB_TOKEN`: GitHub personal access token for creating pull requests
+- `GITHUB_WEBHOOK_SECRET`: Secret for verifying GitHub webhook signatures (required for `serve` command)
 
 You can also create a `.env` file in your project directory with:
 ```
 GITHUB_TOKEN=your_github_token_here
+GITHUB_WEBHOOK_SECRET=your_webhook_secret_here
 ```
 
 **GitHub Token Requirements:**
@@ -169,6 +183,66 @@ Codebot supports repositories with `CLAUDE.md` or `Agents.md` files. These files
 - Repository conventions
 
 Claude Code CLI automatically uses these files for context when making changes.
+
+## PR Review Comment Handling
+
+Codebot can automatically respond to review comments on pull requests it creates. This feature requires running a webhook server that listens for GitHub events.
+
+### Setup Webhook Server
+
+1. **Start the webhook server:**
+   ```bash
+   codebot serve --port 5000
+   ```
+
+2. **Configure GitHub webhook:**
+   - Go to your repository Settings > Webhooks
+   - Click "Add webhook"
+   - Set Payload URL: `https://your-server.com/webhook` (use a service like ngrok for local testing)
+   - Set Content type: `application/json`
+   - Set Secret: Same value as your `GITHUB_WEBHOOK_SECRET` environment variable
+   - Select individual events:
+     - ✅ Pull request reviews
+     - ✅ Pull request review comments
+   - Click "Add webhook"
+
+3. **Verify webhook is working:**
+   - Check the health endpoint: `http://localhost:5000/health`
+   - Create a review comment on a codebot PR to test
+
+### How Review Comments Work
+
+When a reviewer leaves a comment on a codebot-created PR:
+
+1. **Comment Classification**: Codebot determines if the comment is a query/question or a change request
+2. **Workspace Reuse**: Codebot finds and reuses the existing workspace for that PR branch, or clones fresh if needed
+3. **Claude Code Processing**: 
+   - For **queries**: Claude provides an answer without making code changes
+   - For **change requests**: Claude makes the requested changes, tests them, and commits
+4. **Response**: Codebot posts a reply to the comment thread with:
+   - Acknowledgment of the comment
+   - Commit information if changes were made
+   - Link to the new commits
+
+### Comment Classification
+
+Codebot uses keyword detection to classify comments:
+
+**Change Request Keywords:**
+- "please change/fix/update/add/remove"
+- "can you change/fix/update/add/remove"
+- "should change/fix/update"
+- "needs to be changed/fixed/updated"
+- "must change/fix/update"
+
+If none of these keywords are found, the comment is treated as a query.
+
+### FIFO Queue Processing
+
+Multiple review comments are processed one at a time in FIFO (First-In-First-Out) order to ensure:
+- No conflicts between concurrent changes
+- Predictable processing order
+- Stable workspace state
 
 ## Examples
 

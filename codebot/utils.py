@@ -3,6 +3,7 @@
 import hashlib
 import os
 import uuid
+from pathlib import Path
 from typing import Dict, Optional
 
 
@@ -101,3 +102,55 @@ def generate_directory_name(ticket_id: Optional[str] = None, uuid_part: Optional
         return f"task_{ticket_id}_{uuid_part}"
     else:
         return f"task_{uuid_part}"
+
+
+def extract_uuid_from_branch(branch_name: str) -> Optional[str]:
+    """
+    Extract UUID from a codebot branch name.
+    
+    Branch format: u/codebot/[TICKET-ID/]UUID[/name]
+    
+    Args:
+        branch_name: Branch name (e.g., "u/codebot/TASK-123/abc1234/feature")
+        
+    Returns:
+        UUID string or None if not found
+    """
+    parts = branch_name.split("/")
+    
+    # Branch should start with u/codebot
+    if len(parts) < 3 or parts[0] != "u" or parts[1] != "codebot":
+        return None
+    
+    # Find the UUID part (7-character hash)
+    for part in parts[2:]:
+        if len(part) == 7 and all(c in "0123456789abcdef" for c in part):
+            return part
+    
+    return None
+
+
+def find_workspace_by_uuid(base_dir: Path, uuid: str) -> Optional[Path]:
+    """
+    Find a workspace directory by UUID.
+    
+    Workspace format: task_[TICKET-ID_]uuid
+    
+    Args:
+        base_dir: Base directory containing workspaces
+        uuid: UUID to search for
+        
+    Returns:
+        Path to workspace or None if not found
+    """
+    if not base_dir.exists():
+        return None
+    
+    # Search for directories matching the pattern
+    for item in base_dir.iterdir():
+        if item.is_dir() and item.name.endswith(f"_{uuid}"):
+            return item
+        elif item.is_dir() and item.name == f"task_{uuid}":
+            return item
+    
+    return None
