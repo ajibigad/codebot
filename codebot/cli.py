@@ -181,7 +181,7 @@ def serve(
     2. Add webhook URL: https://your-server.com/webhook
     3. Content type: application/json
     4. Secret: Set GITHUB_WEBHOOK_SECRET env var
-    5. Events: Select "Pull request reviews" and "Pull request review comments"
+    5. Events: Select "Issue comments", "Pull request reviews", and "Pull request review comments"
     """
     # Load environment variables from .env file
     load_dotenv()

@@ -71,11 +71,13 @@ def handle_webhook():
     if not payload:
         return jsonify({"error": "Invalid payload"}), 400
     
-    # Handle pull request review comment events
+    # Handle pull request comment events
     if event_type == "pull_request_review_comment":
         return handle_review_comment(payload)
     elif event_type == "pull_request_review":
         return handle_review(payload)
+    elif event_type == "issue_comment":
+        return handle_issue_comment(payload)
     else:
         app.logger.info(f"Ignoring event type: {event_type}")
         return jsonify({"message": "Event type not handled"}), 200
@@ -146,7 +148,7 @@ def handle_review(payload: dict) -> tuple:
     repository = payload.get("repository", {})
     
     # Extract relevant information
-    review_body = review.get("body", "")
+    review_body = review.get("body") or ""
     
     # Skip if review has no body (only inline comments)
     if not review_body.strip():
@@ -172,6 +174,59 @@ def handle_review(payload: dict) -> tuple:
     app.logger.info(f"Queued review for PR #{comment_data['pr_number']}")
     
     return jsonify({"message": "Review queued for processing"}), 200
+
+
+def handle_issue_comment(payload: dict) -> tuple:
+    """
+    Handle issue_comment event (comments on PRs).
+    
+    GitHub treats PR comments as issue comments, so we need to check if this
+    is actually a PR comment and not just a regular issue comment.
+    
+    Args:
+        payload: GitHub webhook payload
+        
+    Returns:
+        Response tuple (data, status_code)
+    """
+    action = payload.get("action")
+    
+    # Only handle created comments
+    if action != "created":
+        return jsonify({"message": f"Ignoring action: {action}"}), 200
+    
+    # Check if this is a PR comment (not a regular issue comment)
+    issue = payload.get("issue", {})
+    if not issue.get("pull_request"):
+        app.logger.info("Ignoring non-PR issue comment")
+        return jsonify({"message": "Not a PR comment"}), 200
+    
+    comment = payload.get("comment", {})
+    repository = payload.get("repository", {})
+    
+    # Extract PR number from issue
+    pr_number = issue.get("number")
+    
+    # Extract relevant information
+    comment_data = {
+        "type": "issue_comment",
+        "comment_id": comment.get("id"),
+        "comment_body": comment.get("body", ""),
+        "pr_number": pr_number,
+        "pr_title": issue.get("title"),
+        "pr_body": issue.get("body", ""),
+        "branch_name": None,  # Will be fetched from PR details
+        "repo_url": repository.get("clone_url"),
+        "repo_owner": repository.get("owner", {}).get("login"),
+        "repo_name": repository.get("name"),
+    }
+    
+    # Add to queue
+    review_queue.put(comment_data)
+    
+    app.logger.info(f"Queued issue comment for PR #{comment_data['pr_number']}")
+    
+    return jsonify({"message": "Comment queued for processing"}), 200
 
 
 @app.route("/health", methods=["GET"])

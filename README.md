@@ -202,8 +202,9 @@ Codebot can automatically respond to review comments on pull requests it creates
    - Set Content type: `application/json`
    - Set Secret: Same value as your `GITHUB_WEBHOOK_SECRET` environment variable
    - Select individual events:
-     - ✅ Pull request reviews
-     - ✅ Pull request review comments
+     - ✅ Issue comments (for general PR comments)
+     - ✅ Pull request reviews (for review summaries)
+     - ✅ Pull request review comments (for inline code comments)
    - Click "Add webhook"
 
 3. **Verify webhook is working:**
@@ -212,7 +213,13 @@ Codebot can automatically respond to review comments on pull requests it creates
 
 ### How Review Comments Work
 
-When a reviewer leaves a comment on a codebot-created PR:
+Codebot handles three types of PR comments:
+
+1. **General PR comments** (issue_comment event) - Comments on the PR conversation
+2. **Inline code comments** (pull_request_review_comment event) - Comments on specific lines
+3. **Review summaries** (pull_request_review event) - Overall review with approval/changes requested
+
+When a reviewer leaves any of these comments on a codebot-created PR:
 
 1. **Comment Classification**: Codebot determines if the comment is a query/question or a change request
 2. **Workspace Reuse**: Codebot finds and reuses the existing workspace for that PR branch, or clones fresh if needed

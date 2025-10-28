@@ -249,20 +249,21 @@ class GitHubPR:
         
         return "\n".join(result)
     
-    def post_review_comment_reply(self, owner: str, repo: str, comment_id: int, body: str) -> dict:
+    def post_review_comment_reply(self, owner: str, repo: str, pr_number: int, body: str, in_reply_to: int = None) -> dict:
         """
         Reply to a pull request review comment.
         
         Args:
             owner: Repository owner
             repo: Repository name
-            comment_id: Review comment ID
+            pr_number: Pull request number
             body: Reply text
+            in_reply_to: Comment ID to reply to (optional)
             
         Returns:
             Comment data from GitHub API
         """
-        url = f"https://api.github.com/repos/{owner}/{repo}/pulls/comments/{comment_id}/replies"
+        url = f"https://api.github.com/repos/{owner}/{repo}/issues/{pr_number}/comments"
         data = {"body": body}
         
         response = requests.post(url, headers=self.headers, json=data)
