@@ -5,7 +5,7 @@ import subprocess
 from pathlib import Path
 from typing import Optional
 
-from codebot.utils import get_git_env
+from codebot.core.utils import get_git_env
 
 
 class GitOps:
@@ -169,3 +169,4 @@ class GitOps:
             raise RuntimeError(f"Failed to get commit message: {result.stderr}")
         
         return result.stdout.strip()
+

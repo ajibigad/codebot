@@ -5,8 +5,8 @@ import subprocess
 from pathlib import Path
 from typing import Optional, Tuple
 
-from codebot.models import TaskPrompt
-from codebot.utils import generate_branch_name, generate_directory_name, generate_short_uuid, get_git_env
+from codebot.core.models import TaskPrompt
+from codebot.core.utils import generate_branch_name, generate_directory_name, generate_short_uuid, get_git_env
 
 
 class EnvironmentManager:

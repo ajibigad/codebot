@@ -6,12 +6,12 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from codebot.claude_md_detector import get_claude_md_warning
-from codebot.claude_runner import ClaudeRunner
-from codebot.environment import EnvironmentManager
-from codebot.git_ops import GitOps
-from codebot.github_pr import GitHubPR
-from codebot.models import TaskPrompt
+from codebot.claude.md_detector import get_claude_md_warning
+from codebot.claude.runner import ClaudeRunner
+from codebot.core.environment import EnvironmentManager
+from codebot.core.git_ops import GitOps
+from codebot.core.github_pr import GitHubPR
+from codebot.core.models import TaskPrompt
 
 
 class Orchestrator:

@@ -6,12 +6,12 @@ from pathlib import Path
 from queue import Empty, Queue
 from typing import Optional
 
-from codebot.environment import EnvironmentManager
-from codebot.git_ops import GitOps
-from codebot.github_pr import GitHubPR
-from codebot.models import TaskPrompt
-from codebot.review_runner import ReviewRunner
-from codebot.utils import extract_uuid_from_branch, find_workspace_by_uuid
+from codebot.core.environment import EnvironmentManager
+from codebot.core.git_ops import GitOps
+from codebot.core.github_pr import GitHubPR
+from codebot.core.models import TaskPrompt
+from codebot.server.review_runner import ReviewRunner
+from codebot.core.utils import extract_uuid_from_branch, find_workspace_by_uuid
 
 
 class ReviewProcessor:

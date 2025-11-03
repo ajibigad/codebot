@@ -4,7 +4,7 @@ import subprocess
 from pathlib import Path
 from typing import Optional
 
-from codebot.claude_runner import ClaudeRunner
+from codebot.claude.runner import ClaudeRunner
 
 
 class ReviewRunner:

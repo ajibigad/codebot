@@ -10,17 +10,45 @@ Codebot is a CLI tool that automates AI-assisted development tasks by:
 3. Running Claude Code CLI in headless mode to make changes
 4. Committing changes and creating GitHub pull requests
 
+## Architecture
+
+Codebot is organized into four main packages:
+
+### 1. `codebot/cli_runner/` - CLI Task Execution
+- `runner.py`: Implements the `run` command for executing tasks from the CLI
+- Handles task prompt parsing and validation
+- Manages GitHub token validation
+- Coordinates with the orchestrator to execute tasks
+
+### 2. `codebot/server/` - Webhook and HTTP Server
+- `app.py`: Implements the `serve` command for starting the webhook server
+- `webhook_server.py`: Flask-based webhook endpoint for GitHub events
+- `review_processor.py`: Processes PR review comments from the queue
+- `review_runner.py`: Specialized Claude runner for review comments
+
+### 3. `codebot/core/` - Shared Core Logic
+- `models.py`: Data models (TaskPrompt)
+- `parser.py`: Task prompt parsing (JSON/YAML)
+- `utils.py`: Utility functions (UUID generation, branch naming, validation)
+- `environment.py`: Environment manager for isolated workspaces
+- `git_ops.py`: Git operations (commit, push, branch management)
+- `github_pr.py`: GitHub API integration (PR creation, comments)
+- `orchestrator.py`: Main orchestrator coordinating all components
+
+### 4. `codebot/claude/` - Claude Code Integration
+- `runner.py`: Claude Code CLI integration and execution
+- `md_detector.py`: CLAUDE.md file detection
+
+### 5. `codebot/cli.py` - Thin Entry Point
+- Main CLI entry point that delegates to `cli_runner` and `server` modules
+- Registers the `run` and `serve` commands
+- Loads environment variables
+
 ## Components Implemented
 
-### Core Modules
+### Core Modules (codebot/core/)
 
-#### 1. `cli.py` - CLI Interface
-- Uses Click framework for command-line parsing
-- Accepts `--task-prompt` and `--task-prompt-file` options
-- Supports `--work-dir`, `--github-token`, and `--verbose` flags
-- Entry point for the application
-
-#### 2. `models.py` - Data Models
+#### 1. `models.py` - Data Models
 - `TaskPrompt` dataclass with fields:
   - `repository_url` (required)
   - `description` (required)
@@ -30,52 +58,48 @@ Codebot is a CLI tool that automates AI-assisted development tasks by:
   - `base_branch` (optional)
 - Includes validation for required fields
 
-#### 3. `parser.py` - Task Prompt Parsing
+#### 2. `parser.py` - Task Prompt Parsing
 - Supports both JSON and YAML formats
 - Auto-detects format based on content
 - `parse_task_prompt()` for string content
 - `parse_task_prompt_file()` for file-based parsing
 
-#### 4. `utils.py` - Utility Functions
+#### 3. `utils.py` - Utility Functions
 - `generate_short_uuid()`: Creates 7-character UUID hash
 - `generate_branch_name()`: Creates branch names in format `u/codebot/[TICKET-ID/]uuid/short-name`
 - `generate_directory_name()`: Creates directory names in format `task_[TICKET-ID_]uuid`
+- `validate_github_token()`: Validates GitHub tokens
+- `get_git_env()`: Returns non-interactive Git environment
+- `extract_uuid_from_branch()`: Extracts UUID from branch names
+- `find_workspace_by_uuid()`: Finds workspace directories by UUID
 
-#### 5. `environment.py` - Environment Manager
+#### 4. `environment.py` - Environment Manager
 - Creates isolated development environments
 - Clones repositories into temporary directories
 - Detects default branch (main/master)
 - Creates and checks out new branches
 - Manages git operations for environment setup
+- Supports workspace reuse for PR review comments
 
-#### 6. `claude_md_detector.py` - CLAUDE.md Detection
-- Detects `CLAUDE.md` or `Agents.md` files
-- Provides warnings if files are missing
-- Supports project-specific guidance for Claude Code
-
-#### 7. `claude_runner.py` - Claude Code CLI Integration
-- Checks if Claude Code CLI is installed
-- Runs Claude Code in headless mode using `-p` flag
-- Uses comprehensive system prompt that guides AI through engineering workflow
-- Uses `--append-system-prompt` for additional instructions
-- Uses `--output-format stream-json` for structured output
-- Verifies changes were committed
-- Retrieves commit messages
-
-#### 8. `git_ops.py` - Git Operations
+#### 5. `git_ops.py` - Git Operations
 - Commits changes with messages
 - Pushes branches to remote
 - Checks for uncommitted changes
 - Retrieves commit hashes and branch names
+- Gets commit messages
 
-#### 9. `github_pr.py` - GitHub PR Creation
+#### 6. `github_pr.py` - GitHub PR Creation and Management
 - Extracts repo owner/name from URLs
 - Creates pull requests via GitHub REST API
 - Generates PR titles and bodies
 - Uses GitHub token for authentication
 - Supports both HTTPS and SSH URLs
+- Posts PR comments and review comment replies
+- Fetches PR details and files changed
+- Updates PR descriptions
+- Gets comment threads
 
-#### 10. `orchestrator.py` - Main Orchestrator
+#### 7. `orchestrator.py` - Main Orchestrator
 - Coordinates all components in sequence:
   1. Parse task prompt
   2. Setup environment
@@ -87,6 +111,71 @@ Codebot is a CLI tool that automates AI-assisted development tasks by:
   8. Summary output
 - Handles errors gracefully
 - Preserves work directories for inspection
+- Tracks git state before and after Claude runs
+
+### Claude Modules (codebot/claude/)
+
+#### 1. `md_detector.py` - CLAUDE.md Detection
+- Detects `CLAUDE.md` or `Agents.md` files
+- Provides warnings if files are missing
+- Supports project-specific guidance for Claude Code
+
+#### 2. `runner.py` - Claude Code CLI Integration
+- Checks if Claude Code CLI is installed
+- Runs Claude Code in headless mode using `-p` flag
+- Uses comprehensive system prompt that guides AI through engineering workflow
+- Uses `--append-system-prompt` for additional instructions
+- Uses `--output-format stream-json` for structured output
+- Extracts Claude's final response from stream output
+- Verifies changes were committed
+- Retrieves commit messages
+
+### Server Modules (codebot/server/)
+
+#### 1. `app.py` - Webhook Server Command
+- Implements the `serve` CLI command
+- Validates GitHub token and webhook secret
+- Starts Flask server and review processor
+- Manages server lifecycle
+
+#### 2. `webhook_server.py` - Flask Webhook Server
+- Receives GitHub webhook events
+- Verifies webhook signatures
+- Handles three types of PR comments:
+  - Issue comments (general PR comments)
+  - Pull request reviews (review summaries)
+  - Pull request review comments (inline code comments)
+- Queues comments for processing (FIFO)
+- Filters out codebot's own comments
+- Health check endpoint
+
+#### 3. `review_processor.py` - Review Comment Processor
+- Processes review comments from queue sequentially
+- Manages workspace reuse and updates
+- Classifies comments using Claude AI (query/change request/ambiguous)
+- Provides full context to Claude (PR details, code snippets, threads)
+- Posts replies to GitHub
+- Updates PR descriptions after changes
+- Handles errors gracefully
+
+#### 4. `review_runner.py` - Review-Specific Claude Runner
+- Specialized Claude runner for PR review comments
+- Builds contextual system prompts with:
+  - PR title and description
+  - Files changed
+  - Comment location (file, line, diff hunk)
+  - Full comment thread
+- Handles both queries and change requests
+- Extracts Claude's responses
+
+### CLI Runner Module (codebot/cli_runner/)
+
+#### 1. `runner.py` - Run Command Implementation
+- Implements the `run` CLI command
+- Parses task prompts from files or strings
+- Validates GitHub tokens
+- Creates and manages work directories
+- Coordinates with orchestrator to execute tasks
 
 ### Supporting Files
 

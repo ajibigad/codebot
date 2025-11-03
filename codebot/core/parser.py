@@ -6,7 +6,7 @@ from typing import Union
 
 import yaml
 
-from codebot.models import TaskPrompt
+from codebot.core.models import TaskPrompt
 
 
 def parse_task_prompt(content: str) -> TaskPrompt:
