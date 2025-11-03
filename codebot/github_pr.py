@@ -249,22 +249,25 @@ class GitHubPR:
         
         return "\n".join(result)
     
-    def post_review_comment_reply(self, owner: str, repo: str, pr_number: int, body: str, in_reply_to: int = None) -> dict:
+    def post_review_comment_reply(self, owner: str, repo: str, pr_number: int, comment_id: int, body: str) -> dict:
         """
-        Reply to a pull request review comment.
+        Reply to a pull request review comment in the same thread.
         
         Args:
             owner: Repository owner
             repo: Repository name
             pr_number: Pull request number
+            comment_id: ID of the comment to reply to
             body: Reply text
-            in_reply_to: Comment ID to reply to (optional)
             
         Returns:
             Comment data from GitHub API
         """
-        url = f"https://api.github.com/repos/{owner}/{repo}/issues/{pr_number}/comments"
-        data = {"body": body}
+        url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}/comments"
+        data = {
+            "body": body,
+            "in_reply_to": comment_id
+        }
         
         response = requests.post(url, headers=self.headers, json=data)
         
@@ -295,3 +298,85 @@ class GitHubPR:
             raise RuntimeError(f"Failed to post comment: {response.status_code} - {response.text}")
         
         return response.json()
+    
+    def update_pr_description(self, owner: str, repo: str, pr_number: int, title: str, body: str) -> dict:
+        """
+        Update a pull request's title and description.
+        
+        Args:
+            owner: Repository owner
+            repo: Repository name
+            pr_number: Pull request number
+            title: New PR title
+            body: New PR body/description
+            
+        Returns:
+            Updated PR data from GitHub API
+        """
+        url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}"
+        data = {
+            "title": title,
+            "body": body
+        }
+        
+        response = requests.patch(url, headers=self.headers, json=data)
+        
+        if response.status_code != 200:
+            raise RuntimeError(f"Failed to update PR: {response.status_code} - {response.text}")
+        
+        return response.json()
+    
+    def get_comment_thread(self, owner: str, repo: str, pr_number: int, comment_id: int) -> list:
+        """
+        Get the comment thread for a specific review comment.
+        
+        Args:
+            owner: Repository owner
+            repo: Repository name
+            pr_number: Pull request number
+            comment_id: Comment ID to get thread for
+            
+        Returns:
+            List of comments in the thread, ordered chronologically
+        """
+        url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}/comments"
+        response = requests.get(url, headers=self.headers)
+        
+        if response.status_code != 200:
+            return []
+        
+        all_comments = response.json()
+        
+        thread_comments = []
+        current_id = comment_id
+        
+        comment_map = {c["id"]: c for c in all_comments}
+        
+        if current_id not in comment_map:
+            return []
+        
+        current_comment = comment_map[current_id]
+        
+        thread_root_id = current_comment.get("in_reply_to_id")
+        while thread_root_id and thread_root_id in comment_map:
+            current_comment = comment_map[thread_root_id]
+            thread_root_id = current_comment.get("in_reply_to_id")
+        
+        root_id = current_comment["id"]
+        
+        for comment in all_comments:
+            if comment["id"] == root_id:
+                thread_comments.append(comment)
+            elif comment.get("in_reply_to_id") == root_id:
+                thread_comments.append(comment)
+            else:
+                check_id = comment.get("in_reply_to_id")
+                while check_id and check_id in comment_map:
+                    if check_id == root_id:
+                        thread_comments.append(comment)
+                        break
+                    check_id = comment_map[check_id].get("in_reply_to_id")
+        
+        thread_comments.sort(key=lambda c: c["created_at"])
+        
+        return thread_comments

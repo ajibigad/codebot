@@ -1,5 +1,6 @@
 """Claude Code CLI integration."""
 
+import json
 import subprocess
 from pathlib import Path
 from typing import Optional
@@ -103,14 +104,14 @@ class ClaudeRunner:
         print(f"Task: {description}")
         print("=" * 80)
         
-        # Run Claude Code CLI with output streaming to terminal
-        # Don't capture output so user can see what Claude is doing in real-time
         result = subprocess.run(
             cmd,
             cwd=self.work_dir,
+            capture_output=True,
             text=True,
         )
         
+        print(result.stdout)
         print("=" * 80)
         return result
     
@@ -147,5 +148,34 @@ class ClaudeRunner:
         
         if result.returncode == 0 and result.stdout.strip():
             return result.stdout.strip()
+        
+        return None
+    
+    def extract_claude_response(self, result: subprocess.CompletedProcess) -> Optional[str]:
+        """
+        Extract Claude's text responses from the stream-json output.
+        
+        Args:
+            result: CompletedProcess from run_task
+            
+        Returns:
+            Final response from Claude, or None if extraction fails
+        """
+        if result.returncode != 0 or not result.stdout:
+            return None
+        
+        for line in result.stdout.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            
+            try:
+                data = json.loads(line)
+                
+                if data.get("type") == "result" and "result" in data:
+                    return data["result"]
+                    
+            except json.JSONDecodeError:
+                continue
         
         return None

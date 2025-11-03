@@ -157,7 +157,7 @@ def run(
 @click.option(
     "--debug",
     is_flag=True,
-    help="Enable debug mode",
+    help="Enable debug mode (auto-reload on code changes, detailed errors)",
 )
 def serve(
     port: int,

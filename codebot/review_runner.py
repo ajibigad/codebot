@@ -49,20 +49,40 @@ class ReviewRunner:
             task_description = (
                 f"Code Review Change Request:\n\n"
                 f"{comment_body}\n\n"
-                f"Please make the requested changes, test them, and commit with a clear message."
+                f"Please make the requested changes, test them, and commit with a clear message.\n\n"
+                f"IMPORTANT: After completing the changes, provide a CONCISE summary in this format:\n"
+                f"✅ [Brief statement of what was done]\n\n"
+                f"**Changes:**\n"
+                f"- [Change 1]\n"
+                f"- [Change 2]\n\n"
+                f"**Results:** [Brief test results]\n\n"
+                f"Keep it short and scannable. Skip pleasantries like 'Perfect!' or 'Here's what I did'."
             )
         else:
             task_description = (
                 f"Code Review Query:\n\n"
                 f"{comment_body}\n\n"
-                f"Please provide a clear, helpful answer. Do not make any code changes."
+                f"Please provide a clear, concise, but sufficient answer. "
+                f"Be direct and to the point while ensuring the reviewer understands. "
+                f"Do not make any code changes."
             )
         
-        # Run Claude Code
         return self.claude_runner.run_task(
             description=task_description,
             append_system_prompt=system_prompt,
         )
+    
+    def extract_response(self, result: subprocess.CompletedProcess) -> Optional[str]:
+        """
+        Extract Claude's response from the result.
+        
+        Args:
+            result: CompletedProcess from handle_review_comment
+            
+        Returns:
+            Claude's text response, or None if extraction fails
+        """
+        return self.claude_runner.extract_claude_response(result)
     
     def _build_review_system_prompt(
         self,
@@ -105,9 +125,31 @@ class ReviewRunner:
             prompt_parts.append(pr_context['files_changed'])
             prompt_parts.append("```")
         
+        if pr_context.get("comment_file"):
+            prompt_parts.append(f"\nComment Location:")
+            prompt_parts.append(f"- File: {pr_context.get('comment_file')}")
+            prompt_parts.append(f"- Line: {pr_context.get('comment_line')}")
+            
+            if pr_context.get("comment_diff_hunk"):
+                prompt_parts.append(f"\nCode Being Reviewed:")
+                prompt_parts.append("```")
+                prompt_parts.append(pr_context.get('comment_diff_hunk'))
+                prompt_parts.append("```")
+        
+        if pr_context.get("comment_thread"):
+            prompt_parts.append("")
+            prompt_parts.append("=" * 80)
+            prompt_parts.append("COMMENT THREAD (Previous Conversation)")
+            prompt_parts.append("=" * 80)
+            for i, thread_comment in enumerate(pr_context['comment_thread'][:-1], 1):
+                author = thread_comment.get('user', {}).get('login', 'Unknown')
+                body = thread_comment.get('body', '')
+                prompt_parts.append(f"\n{i}. {author}:")
+                prompt_parts.append(body)
+        
         prompt_parts.append("")
         prompt_parts.append("=" * 80)
-        prompt_parts.append("REVIEW COMMENT")
+        prompt_parts.append("CURRENT REVIEW COMMENT")
         prompt_parts.append("=" * 80)
         prompt_parts.append("")
         prompt_parts.append(comment_body)
@@ -125,14 +167,27 @@ class ReviewRunner:
             prompt_parts.append("5. Commit the changes with a clear message")
             prompt_parts.append("")
             prompt_parts.append("Your commit message should reference that this addresses a review comment.")
+            prompt_parts.append("")
+            prompt_parts.append("RESPONSE FORMAT:")
+            prompt_parts.append("Provide a CONCISE, scannable summary. NO pleasantries or preambles.")
+            prompt_parts.append("Format:")
+            prompt_parts.append("✅ [One-line summary of what was done]")
+            prompt_parts.append("")
+            prompt_parts.append("**Changes:**")
+            prompt_parts.append("- [Specific change 1]")
+            prompt_parts.append("- [Specific change 2]")
+            prompt_parts.append("")
+            prompt_parts.append("**Results:** [Brief test/verification results]")
         else:
             prompt_parts.append("")
             prompt_parts.append("This is a QUERY/QUESTION. You should:")
             prompt_parts.append("1. Understand what is being asked")
-            prompt_parts.append("2. Provide a clear, helpful answer")
-            prompt_parts.append("3. Reference specific code or files if relevant")
-            prompt_parts.append("4. DO NOT make any code changes")
+            prompt_parts.append("2. Provide a CONCISE but SUFFICIENT answer")
+            prompt_parts.append("3. Be direct and to the point")
+            prompt_parts.append("4. Reference specific code or files if relevant")
+            prompt_parts.append("5. DO NOT make any code changes")
             prompt_parts.append("")
+            prompt_parts.append("IMPORTANT: Keep your answer brief and focused. Avoid unnecessary elaboration.")
             prompt_parts.append("Your response will be posted as a comment reply.")
         
         return "\n".join(prompt_parts)
