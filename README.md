@@ -58,6 +58,9 @@ codebot serve --port 5000
 
 # With custom work directory
 codebot serve --port 5000 --work-dir /path/to/workspaces
+
+# Development mode with auto-reload
+codebot serve --port 5000 --debug
 ```
 
 ### Task Prompt Format
@@ -221,28 +224,39 @@ Codebot handles three types of PR comments:
 
 When a reviewer leaves any of these comments on a codebot-created PR:
 
-1. **Comment Classification**: Codebot determines if the comment is a query/question or a change request
+1. **Comment Classification**: Claude AI analyzes the comment with full context to determine intent
 2. **Workspace Reuse**: Codebot finds and reuses the existing workspace for that PR branch, or clones fresh if needed
 3. **Claude Code Processing**: 
-   - For **queries**: Claude provides an answer without making code changes
-   - For **change requests**: Claude makes the requested changes, tests them, and commits
+   - For **queries**: Claude provides a concise, direct answer without making code changes
+   - For **change requests**: Claude makes the requested changes, tests them, commits, and updates the PR description
+   - For **ambiguous**: Codebot asks the reviewer to clarify their intent
 4. **Response**: Codebot posts a reply to the comment thread with:
-   - Acknowledgment of the comment
-   - Commit information if changes were made
-   - Link to the new commits
+   - For queries: A concise but sufficient answer
+   - For changes: A brief summary of changes made and test results
+   - For ambiguous: A question asking for clarification
+5. **Recursion Prevention**: Codebot ignores its own comments to avoid infinite loops
 
 ### Comment Classification
 
-Codebot uses keyword detection to classify comments:
+Codebot uses Claude AI to intelligently classify comments into three categories:
 
-**Change Request Keywords:**
-- "please change/fix/update/add/remove"
-- "can you change/fix/update/add/remove"
-- "should change/fix/update"
-- "needs to be changed/fixed/updated"
-- "must change/fix/update"
+1. **Query/Question** - The reviewer is asking for clarification or information
+   - Example: "Why did you choose this approach?", "What does this parameter do?"
+   - Response: Claude provides a concise, direct answer without making code changes
 
-If none of these keywords are found, the comment is treated as a query.
+2. **Change Request** - The reviewer is requesting specific code modifications
+   - Example: "Please add error handling", "This should use async/await"
+   - Response: Claude makes the changes, tests them, commits, and updates the PR description
+
+3. **Ambiguous** - The intent is unclear and needs clarification
+   - Example: "This could be better", "Not sure about this"
+   - Response: Codebot asks the reviewer to clarify if they want an answer or code changes
+
+This AI-powered classification is more accurate than keyword matching and understands context from:
+- The PR title and description
+- Files changed in the PR
+- The specific code being reviewed (file, line, diff hunk)
+- Previous comments in the thread
 
 ### FIFO Queue Processing
 
@@ -250,6 +264,33 @@ Multiple review comments are processed one at a time in FIFO (First-In-First-Out
 - No conflicts between concurrent changes
 - Predictable processing order
 - Stable workspace state
+
+### PR Description Updates
+
+After Claude makes changes in response to review comments, codebot automatically updates the PR description to reflect all changes:
+- Uses Claude AI to analyze the full diff between the PR branch and main
+- Generates a unified, cohesive description of all changes
+- Focuses on what was built and how it works, not individual commits
+- Simplifies the "Files Changed" section:
+  - Shows only file names (not diff stats)
+  - Omits the section entirely if more than 5 files changed (GitHub already shows this)
+
+This ensures reviewers always see an up-to-date summary of the PR's complete functionality.
+
+### Development Mode
+
+When developing codebot itself, use `--debug` flag for a better experience:
+
+```bash
+codebot serve --port 5000 --debug
+```
+
+**Debug mode features:**
+- **Auto-reload**: Server automatically restarts when you edit Python files
+- **Detailed errors**: Shows full stack traces in the browser
+- **Better logging**: More verbose output for debugging
+
+**Note**: Never use `--debug` in production - it's slower and exposes error details.
 
 ## Examples
 
