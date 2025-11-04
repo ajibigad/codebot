@@ -16,7 +16,7 @@ Before installing Codebot, ensure you have the following:
 
 ### System Requirements
 
-- macOS, Linux, or Windows (with WSL)
+- macOS or Linux
 - At least 2GB of free disk space
 - Internet connection for API calls and repository access
 
@@ -44,7 +44,7 @@ Verify installation:
 claude --version
 ```
 
-## Step 3: Clone and Install Codebot
+## Step 3: Install Codebot
 
 ```bash
 # Clone the repository
@@ -53,12 +53,15 @@ cd codebot
 
 # Install dependencies
 uv sync
+
+# Activate the virtual environment
+source .venv/bin/activate
+
+# Verify installation
+codebot --help
 ```
 
-This will:
-- Create a virtual environment
-- Install all required Python packages
-- Set up the `codebot` command
+**Note:** You need to activate the virtual environment each time you open a new terminal, or use `uv run codebot` as a shortcut without activation.
 
 ## Step 4: Configure GitHub Token
 
@@ -142,7 +145,7 @@ uv run codebot --help
 Or activate the virtual environment:
 
 ```bash
-source .venv/bin/activate  # On Unix/macOS
+source .venv/bin/activate
 codebot --help
 ```
 

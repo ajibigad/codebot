@@ -16,7 +16,11 @@ AI-powered development automation tool that executes tasks using Claude Code CLI
 ```bash
 # Install dependencies
 curl -LsSf https://astral.sh/uv/install.sh | sh
+git clone https://github.com/yourusername/codebot.git
 cd codebot && uv sync
+
+# Activate virtual environment
+source .venv/bin/activate
 
 # Set GitHub token
 export GITHUB_TOKEN="your_github_token"
@@ -63,11 +67,16 @@ git clone https://github.com/yourusername/codebot.git
 cd codebot
 uv sync
 
+# Activate virtual environment
+source .venv/bin/activate
+
 # Verify installation
-uv run codebot --help
+codebot --help
 ```
 
-See [Installation Guide](docs/installation.md) for detailed instructions.
+**Note:** You need to activate the virtual environment each time you open a new terminal, or use `uv run codebot` as a shortcut.
+
+See [Installation Guide](docs/installation.md) for detailed instructions and troubleshooting.
 
 ## Usage Examples
 

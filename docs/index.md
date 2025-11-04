@@ -35,8 +35,12 @@ Welcome to the Codebot documentation! Codebot is a CLI tool that automates devel
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Clone and install codebot
+git clone https://github.com/yourusername/codebot.git
 cd codebot
 uv sync
+
+# Activate virtual environment
+source .venv/bin/activate
 ```
 
 ### 2. Set Up GitHub Token
