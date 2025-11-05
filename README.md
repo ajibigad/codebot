@@ -198,6 +198,11 @@ See [Architecture](docs/architecture.md) for technical details.
 - **Repository Cloning**: Each task clones the repository into a fresh workspace, which may be slow for large repositories with extensive history
 - **GitHub Identity**: Comments and PRs are created using your Personal Access Token, so they appear under your GitHub account rather than as a bot user. For production use, we should consider creating a GitHub App for proper bot identity 
 
+## Future Plans
+- Slack support: Assign a task to codebot from slack
+- Jira support: Assign a jira ticket to codebot
+- Git worktrees for large repositories
+
 ## Contributing
 
 Contributions are welcome! Here's how to get started:

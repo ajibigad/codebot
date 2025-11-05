@@ -160,13 +160,6 @@ Additional requirements:
 3. Select required scopes
 4. Copy token and store securely
 
-**Security Tips:**
-- Never commit tokens to code
-- Use environment variables or `.env` files
-- Rotate tokens periodically
-- Use fine-grained tokens when possible
-- Limit token scope to specific repositories
-
 ## Workspace Configuration
 
 ### Work Directory Structure
