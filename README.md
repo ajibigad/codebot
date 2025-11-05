@@ -67,6 +67,9 @@ git clone https://github.com/yourusername/codebot.git
 cd codebot
 uv sync
 
+# For corporate environments with blocked PyPI access:
+# uv sync --index-url https://pypi.company.com/simple
+
 # Activate virtual environment
 source .venv/bin/activate
 

@@ -12,5 +12,8 @@ wheels/
 # Codebot work directories
 codebot_workspace/
 
+# Environment files
 .env
-codebot_workspace
+
+# UV configuration (optional - remove if you want to commit corporate config)
+# .uv.toml
