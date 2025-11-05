@@ -94,8 +94,9 @@ def serve(
     
     # Validate GitHub token
     print("Validating GitHub token...")
-    if not validate_github_token(effective_token):
+    if not validate_github_token(effective_token, verbose=True):
         click.echo("Error: Invalid GitHub token. Please check your token and try again.", err=True)
+        click.echo("Make sure your token has the correct permissions (repo access for private repos).", err=True)
         sys.exit(1)
     print("GitHub token validated successfully")
     

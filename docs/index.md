@@ -18,6 +18,7 @@ Welcome to the Codebot documentation! Codebot is a CLI tool that automates devel
 ### Configuration
 
 - [Configuration Guide](configuration.md) - Environment variables, API keys, and settings
+- [Troubleshooting Guide](troubleshooting.md) - Common issues and solutions
 
 ### Advanced
 
@@ -85,6 +86,7 @@ Automatically respond to PR review comments with code changes or answers.
 
 - **Installation issues?** See [Installation Guide](installation.md)
 - **Configuration questions?** Check [Configuration Guide](configuration.md)
+- **Having problems?** Visit [Troubleshooting Guide](troubleshooting.md)
 - **Want examples?** Browse [Examples](examples.md)
 - **Curious how it works?** Read [Architecture](architecture.md)
 

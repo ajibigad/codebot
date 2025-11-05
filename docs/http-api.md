@@ -279,23 +279,7 @@ Response:
 
 ## Troubleshooting
 
-### 401 Unauthorized
-
-- Verify API key is correct
-- Check `Authorization` header format
-- Ensure `CODEBOT_API_KEYS` is set on server
-
-### Task stuck in pending
-
-- Check worker threads are running
-- Verify `--workers` is > 0
-- Check server logs for errors
-
-### Task failed
-
-- Check `error` field in status response
-- Verify GitHub token has correct permissions
-- Ensure repository URL is accessible
+For API errors, task issues, and server problems, see the [Troubleshooting Guide](troubleshooting.md).
 
 ## Next Steps
 

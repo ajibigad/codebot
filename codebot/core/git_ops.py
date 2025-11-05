@@ -11,18 +11,78 @@ from codebot.core.utils import get_git_env
 class GitOps:
     """Git operations for codebot."""
     
-    def __init__(self, work_dir: Path):
+    def __init__(self, work_dir: Path, github_token: Optional[str] = None):
         """
         Initialize git operations.
         
         Args:
             work_dir: Working directory with git repository
+            github_token: Optional GitHub token for authenticated operations
         """
         self.work_dir = work_dir
+        self.github_token = github_token
     
     def _get_git_env(self) -> dict:
         """Get git environment variables for non-interactive operation."""
         return get_git_env()
+    
+    def _create_authenticated_url(self, repository_url: str) -> str:
+        """
+        Create authenticated URL for GitHub repository.
+        
+        Args:
+            repository_url: Original repository URL
+            
+        Returns:
+            Authenticated URL with embedded token
+        """
+        from urllib.parse import urlparse
+        from codebot.core.utils import is_github_url
+        
+        if not self.github_token or not is_github_url(repository_url):
+            return repository_url
+        
+        parsed = urlparse(repository_url)
+        if not parsed.netloc:
+            return repository_url
+        
+        # Extract repo path
+        path = parsed.path
+        if not path.endswith(".git"):
+            path += ".git"
+        
+        # Build authenticated URL using oauth2 format
+        auth_url = f"https://oauth2:{self.github_token}@{parsed.netloc}{path}"
+        return auth_url
+    
+    def _get_remote_url(self) -> Optional[str]:
+        """Get the current remote origin URL."""
+        env = self._get_git_env()
+        result = subprocess.run(
+            ["git", "remote", "get-url", "origin"],
+            cwd=self.work_dir,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        
+        if result.returncode == 0:
+            return result.stdout.strip()
+        return None
+    
+    def _set_remote_url(self, url: str) -> None:
+        """Set the remote origin URL."""
+        env = self._get_git_env()
+        result = subprocess.run(
+            ["git", "remote", "set-url", "origin", url],
+            cwd=self.work_dir,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        
+        if result.returncode != 0:
+            raise RuntimeError(f"Failed to set remote URL: {result.stderr}")
     
     def commit_changes(self, message: str) -> None:
         """
@@ -68,19 +128,36 @@ class GitOps:
         """
         env = self._get_git_env()
         
-        # Push branch to remote
-        result = subprocess.run(
-            ["git", "push", "-u", "origin", branch_name],
-            cwd=self.work_dir,
-            capture_output=True,
-            text=True,
-            env=env,
-        )
+        # For GitHub repositories with token, temporarily use authenticated URL
+        original_url = None
+        if self.github_token:
+            original_url = self._get_remote_url()
+            if original_url:
+                auth_url = self._create_authenticated_url(original_url)
+                if auth_url != original_url:
+                    print("Setting up authenticated remote for push...")
+                    self._set_remote_url(auth_url)
         
-        if result.returncode != 0:
-            raise RuntimeError(f"Failed to push branch: {result.stderr}")
-        
-        print(f"Pushed branch {branch_name} to remote")
+        try:
+            # Push branch to remote
+            result = subprocess.run(
+                ["git", "push", "-u", "origin", branch_name],
+                cwd=self.work_dir,
+                capture_output=True,
+                text=True,
+                env=env,
+            )
+            
+            if result.returncode != 0:
+                raise RuntimeError(f"Failed to push branch: {result.stderr}")
+            
+            print(f"Pushed branch {branch_name} to remote")
+            
+        finally:
+            # Restore original URL for security
+            if original_url and self.github_token:
+                print("Restoring clean remote URL...")
+                self._set_remote_url(original_url)
     
     def has_uncommitted_changes(self) -> bool:
         """

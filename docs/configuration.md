@@ -92,6 +92,10 @@ Create a `.env` file in your project directory:
 GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxx
 GITHUB_WEBHOOK_SECRET=your_webhook_secret_here
 
+# GitHub Enterprise Configuration (if using enterprise)
+GITHUB_ENTERPRISE_URL=https://github.company.com
+GITHUB_API_URL=https://github.company.com/api/v3
+
 # HTTP API Configuration
 CODEBOT_API_KEYS=secret-key-1,secret-key-2
 CODEBOT_MAX_WORKERS=2
@@ -206,63 +210,9 @@ codebot serve --port 8000 --workers 4
 codebot serve --port 5000 --debug
 ```
 
-## Security Best Practices
-
-1. **Protect API Keys**
-   - Use strong, random keys
-   - Store in environment variables
-   - Never log or expose in responses
-
-2. **Secure Webhook Secret**
-   - Use cryptographically random string
-   - Match exactly in GitHub webhook config
-   - Rotate periodically
-
-3. **GitHub Token Security**
-   - Use fine-grained tokens when possible
-   - Limit to specific repositories
-   - Set expiration dates
-   - Revoke if compromised
-
-4. **Network Security**
-   - Use HTTPS in production
-   - Configure firewall rules
-   - Use reverse proxy (nginx, caddy)
-   - Enable rate limiting
-
-5. **Workspace Isolation**
-   - Use dedicated work directory
-   - Clean up old workspaces
-   - Set appropriate file permissions
-
 ## Troubleshooting
 
-### Token validation failed
-
-- Check token hasn't expired
-- Verify token has required scopes
-- Test token with GitHub API:
-  ```bash
-  curl -H "Authorization: token YOUR_TOKEN" https://api.github.com/user
-  ```
-
-### Webhook signature verification failed
-
-- Ensure `GITHUB_WEBHOOK_SECRET` matches GitHub config
-- Check webhook is using `application/json` content type
-- Verify secret has no extra whitespace
-
-### API key not working
-
-- Check `CODEBOT_API_KEYS` is set
-- Verify key matches exactly (no extra spaces)
-- Ensure server was restarted after changing keys
-
-### Worker threads not starting
-
-- Check `CODEBOT_MAX_WORKERS` value
-- Verify sufficient system resources
-- Check server logs for errors
+For token validation issues, GitHub Enterprise setup problems, and other configuration troubleshooting, see the [Troubleshooting Guide](troubleshooting.md).
 
 ## Next Steps
 

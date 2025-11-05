@@ -5,19 +5,30 @@ import os
 import uuid
 from pathlib import Path
 from typing import Dict, Optional
+from urllib.parse import urlparse
 
 
-def validate_github_token(token: str) -> bool:
+def validate_github_token(token: str, api_url: Optional[str] = None, repository_url: Optional[str] = None, verbose: bool = False) -> bool:
     """
     Validate a GitHub token by making a simple API call.
     
     Args:
         token: GitHub personal access token
+        api_url: Optional API URL (auto-detected if not provided)
+        repository_url: Optional repository URL to derive API URL from
+        verbose: Enable verbose logging for debugging
         
     Returns:
         True if token is valid, False otherwise
     """
     import requests
+    
+    if not api_url:
+        api_url = detect_github_api_url(repository_url=repository_url, verbose=verbose)
+    
+    if verbose:
+        print(f"  → Using API URL: {api_url}")
+        print(f"  → Token starts with: {token[:8]}{'*' * (len(token) - 8) if len(token) > 8 else '***'}")
     
     headers = {
         "Authorization": f"token {token}",
@@ -25,9 +36,137 @@ def validate_github_token(token: str) -> bool:
     }
     
     try:
-        response = requests.get("https://api.github.com/user", headers=headers, timeout=10)
+        if verbose:
+            print(f"  → Making request to: {api_url}/user")
+        
+        response = requests.get(f"{api_url}/user", headers=headers, timeout=10)
+        
+        if verbose:
+            print(f"  → Response status: {response.status_code}")
+            if response.status_code != 200:
+                print(f"  → Response headers: {dict(response.headers)}")
+                try:
+                    error_data = response.json()
+                    print(f"  → Response body: {error_data}")
+                    
+                    # Check for common GitHub Enterprise issues
+                    if response.status_code == 401:
+                        print("  → Status 401: Unauthorized - Token may be invalid or expired")
+                    elif response.status_code == 403:
+                        print("  → Status 403: Forbidden - Token may lack required permissions")
+                    elif response.status_code == 404:
+                        print("  → Status 404: Not Found - API endpoint may be incorrect (check GitHub Enterprise URL)")
+                except Exception:
+                    print(f"  → Response text: {response.text[:200]}...")
+                    if response.status_code == 404:
+                        print("  → Status 404: Check if GITHUB_ENTERPRISE_URL is correct for your GitHub instance")
+        
         return response.status_code == 200
-    except requests.RequestException:
+    except requests.RequestException as e:
+        if verbose:
+            print(f"  → Request failed with exception: {type(e).__name__}: {str(e)}")
+        return False
+
+
+def detect_github_info(repository_url: str) -> Dict[str, str]:
+    """
+    Detect GitHub instance information from repository URL.
+    
+    Args:
+        repository_url: Git repository URL
+        
+    Returns:
+        Dictionary with host, is_enterprise, api_url, and base_url
+    """
+    parsed = urlparse(repository_url)
+    
+    if not parsed.netloc:
+        raise ValueError(f"Invalid repository URL: {repository_url}")
+    
+    # Extract host
+    host = parsed.netloc
+    
+    # Determine if it's GitHub.com or Enterprise
+    is_enterprise = host != "github.com"
+    
+    # Build API URL
+    if is_enterprise:
+        api_url = f"https://{host}/api/v3"
+    else:
+        api_url = "https://api.github.com"
+    
+    return {
+        "host": host,
+        "is_enterprise": str(is_enterprise).lower(),
+        "api_url": api_url,
+        "base_url": f"https://{host}"
+    }
+
+
+def detect_github_api_url(repository_url: Optional[str] = None, verbose: bool = False) -> str:
+    """
+    Detect GitHub API URL from environment or repository URL.
+    
+    Args:
+        repository_url: Optional repository URL to derive API from
+        verbose: Enable verbose logging for debugging
+        
+    Returns:
+        GitHub API URL
+    """
+    if verbose:
+        print("  → Detecting GitHub API URL...")
+        
+    # Check explicit API URL from environment
+    api_url = os.getenv("GITHUB_API_URL")
+    if api_url:
+        if verbose:
+            print(f"  → Found GITHUB_API_URL environment variable: {api_url}")
+        return api_url.rstrip("/")
+    
+    # Check enterprise URL from environment
+    enterprise_url = os.getenv("GITHUB_ENTERPRISE_URL")
+    if enterprise_url:
+        api_url = f"{enterprise_url.rstrip('/')}/api/v3"
+        if verbose:
+            print(f"  → Found GITHUB_ENTERPRISE_URL environment variable: {enterprise_url}")
+            print(f"  → Derived API URL: {api_url}")
+        return api_url
+    
+    # Try to derive from repository URL
+    if repository_url:
+        if verbose:
+            print(f"  → Deriving API URL from repository URL: {repository_url}")
+        github_info = detect_github_info(repository_url)
+        api_url = github_info["api_url"]
+        if verbose:
+            print(f"  → Derived API URL: {api_url}")
+        return api_url
+    
+    # Default to github.com
+    if verbose:
+        print("  → No environment variables or repository URL provided, using default: https://api.github.com")
+    return "https://api.github.com"
+
+
+def is_github_url(url: str) -> bool:
+    """
+    Check if URL is a GitHub URL (github.com or enterprise).
+    
+    Args:
+        url: Repository URL to check
+        
+    Returns:
+        True if URL appears to be a GitHub repository
+    """
+    try:
+        parsed = urlparse(url)
+        return (
+            parsed.scheme in ["http", "https"] and
+            parsed.netloc and
+            "github" in parsed.netloc.lower()
+        )
+    except Exception:
         return False
 
 

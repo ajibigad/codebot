@@ -134,38 +134,7 @@ See the [Webhooks Guide](webhooks.md) for detailed webhook configuration.
 
 ## Troubleshooting
 
-### Command not found: codebot
-
-Make sure you're using `uv run`:
-
-```bash
-uv run codebot --help
-```
-
-Or activate the virtual environment:
-
-```bash
-source .venv/bin/activate
-codebot --help
-```
-
-### Invalid GitHub token
-
-Verify your token has the correct permissions:
-
-```bash
-curl -H "Authorization: token YOUR_TOKEN" https://api.github.com/user
-```
-
-### Claude Code CLI not found
-
-Ensure Claude Code CLI is in your PATH:
-
-```bash
-which claude
-```
-
-If not found, reinstall following the [official documentation](https://www.anthropic.com/claude/docs/claude-code).
+For installation issues and common problems, see the [Troubleshooting Guide](troubleshooting.md).
 
 ## Next Steps
 

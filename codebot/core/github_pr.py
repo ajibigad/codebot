@@ -7,16 +7,19 @@ from urllib.parse import urlparse
 
 import requests
 
+from codebot.core.utils import detect_github_api_url, detect_github_info
+
 
 class GitHubPR:
     """Create pull requests on GitHub."""
     
-    def __init__(self, github_token: Optional[str] = None):
+    def __init__(self, github_token: Optional[str] = None, api_url: Optional[str] = None):
         """
         Initialize GitHub PR creator.
         
         Args:
             github_token: GitHub personal access token (defaults to GITHUB_TOKEN env var or .env file)
+            api_url: GitHub API URL (auto-detected if not provided)
         """
         self.token = github_token or os.getenv("GITHUB_TOKEN")
         
@@ -25,10 +28,69 @@ class GitHubPR:
                 "GitHub token not found. Please set GITHUB_TOKEN environment variable or add it to a .env file."
             )
         
+        # Store API URL for later use - will be set per repository if not provided
+        self.default_api_url = api_url or detect_github_api_url()
+        
+        # Cache for repository-specific API URLs
+        self._repo_api_cache = {}
+        
         self.headers = {
             "Authorization": f"token {self.token}",
             "Accept": "application/vnd.github.v3+json",
         }
+    
+    def _get_api_url(self, repository_url: str) -> str:
+        """
+        Get GitHub API URL for the given repository.
+        
+        Args:
+            repository_url: Git repository URL
+            
+        Returns:
+            GitHub API base URL
+        """
+        try:
+            github_info = detect_github_info(repository_url)
+            return github_info["api_url"]
+        except Exception:
+            # Fallback to default API URL
+            return self.default_api_url
+    
+    def _build_api_url(self, repository_url: str, endpoint: str) -> str:
+        """
+        Build full API URL for endpoint.
+        
+        Args:
+            repository_url: Git repository URL (to determine API base)
+            endpoint: API endpoint path
+            
+        Returns:
+            Full API URL
+        """
+        api_base = self._get_api_url(repository_url)
+        return f"{api_base}/{endpoint.lstrip('/')}"
+    
+    def _build_api_url_from_owner_repo(self, owner: str, repo: str, endpoint: str) -> str:
+        """
+        Build full API URL for endpoint using owner/repo.
+        
+        Args:
+            owner: Repository owner
+            repo: Repository name
+            endpoint: API endpoint path
+            
+        Returns:
+            Full API URL
+        """
+        # Check if we have a cached API URL for this repository
+        repo_key = f"{owner}/{repo}"
+        if repo_key in self._repo_api_cache:
+            api_url = self._repo_api_cache[repo_key]
+        else:
+            # Use default API URL
+            api_url = self.default_api_url
+        
+        return f"{api_url}/{endpoint.lstrip('/')}"
     
     def extract_repo_info(self, repository_url: str) -> Tuple[str, str]:
         """
@@ -88,7 +150,12 @@ class GitHubPR:
         """
         owner, repo = self.extract_repo_info(repository_url)
         
-        url = f"https://api.github.com/repos/{owner}/{repo}/pulls"
+        # Cache the API URL for this repository for future method calls
+        repo_key = f"{owner}/{repo}"
+        api_url = self._get_api_url(repository_url)
+        self._repo_api_cache[repo_key] = api_url
+        
+        url = self._build_api_url(repository_url, f"repos/{owner}/{repo}/pulls")
         
         data = {
             "title": title,
@@ -215,7 +282,7 @@ class GitHubPR:
         Returns:
             PR data from GitHub API
         """
-        url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}"
+        url = self._build_api_url_from_owner_repo(owner, repo, f"repos/{owner}/{repo}/pulls/{pr_number}")
         response = requests.get(url, headers=self.headers)
         
         if response.status_code != 200:
@@ -235,7 +302,7 @@ class GitHubPR:
         Returns:
             Formatted string of files changed
         """
-        url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}/files"
+        url = self._build_api_url_from_owner_repo(owner, repo, f"repos/{owner}/{repo}/pulls/{pr_number}/files")
         response = requests.get(url, headers=self.headers)
         
         if response.status_code != 200:
@@ -263,7 +330,7 @@ class GitHubPR:
         Returns:
             Comment data from GitHub API
         """
-        url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}/comments"
+        url = self._build_api_url_from_owner_repo(owner, repo, f"repos/{owner}/{repo}/pulls/{pr_number}/comments")
         data = {
             "body": body,
             "in_reply_to": comment_id
@@ -289,7 +356,7 @@ class GitHubPR:
         Returns:
             Comment data from GitHub API
         """
-        url = f"https://api.github.com/repos/{owner}/{repo}/issues/{pr_number}/comments"
+        url = self._build_api_url_from_owner_repo(owner, repo, f"repos/{owner}/{repo}/issues/{pr_number}/comments")
         data = {"body": body}
         
         response = requests.post(url, headers=self.headers, json=data)
@@ -313,7 +380,7 @@ class GitHubPR:
         Returns:
             Updated PR data from GitHub API
         """
-        url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}"
+        url = self._build_api_url_from_owner_repo(owner, repo, f"repos/{owner}/{repo}/pulls/{pr_number}")
         data = {
             "title": title,
             "body": body
@@ -339,7 +406,7 @@ class GitHubPR:
         Returns:
             List of comments in the thread, ordered chronologically
         """
-        url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}/comments"
+        url = self._build_api_url_from_owner_repo(owner, repo, f"repos/{owner}/{repo}/pulls/{pr_number}/comments")
         response = requests.get(url, headers=self.headers)
         
         if response.status_code != 200:
