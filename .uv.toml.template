@@ -1,0 +1,14 @@
+# UV Configuration Template for Corporate Environments
+# Copy this file to .uv.toml to use custom PyPI mirrors
+
+[index]
+# Replace with your corporate PyPI mirror URL
+url = "https://pypi.company.com/simple"
+
+# Example configurations for common corporate environments:
+# Generic: url = "https://nexus.company.com/repository/pypi-proxy/simple"
+
+# Optional: Additional trusted hosts
+# [index]
+# url = "https://pypi.company.com/simple"
+# trusted-host = ["pypi.company.com"]

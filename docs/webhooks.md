@@ -236,29 +236,7 @@ Features:
 
 ## Troubleshooting
 
-### Webhook not receiving events
-
-1. Check webhook configuration in GitHub
-2. Verify payload URL is correct
-3. Check webhook secret matches
-4. Look at "Recent Deliveries" in GitHub webhook settings
-
-### Signature verification failed
-
-- Ensure `GITHUB_WEBHOOK_SECRET` matches GitHub webhook secret
-- Check webhook is using `application/json` content type
-
-### Comments not being processed
-
-- Check server logs for errors
-- Verify GitHub token has correct permissions
-- Ensure review processor thread is running
-
-### Codebot responding to its own comments
-
-- Check for signature in comment body
-- Verify recursion prevention is working
-- May need to update filter logic
+For webhook issues, signature verification problems, and comment processing errors, see the [Troubleshooting Guide](troubleshooting.md).
 
 ## Best Practices
 

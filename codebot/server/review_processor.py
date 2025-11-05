@@ -196,7 +196,7 @@ class ReviewProcessor:
             return
         
         # Check if changes were made
-        git_ops = GitOps(workspace_path)
+        git_ops = GitOps(workspace_path, github_token=self.github_token)
         
         if is_change_request:
             try:

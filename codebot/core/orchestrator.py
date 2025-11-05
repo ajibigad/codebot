@@ -122,7 +122,7 @@ class Orchestrator:
             return
         
         self.claude_runner = ClaudeRunner(self.work_dir)
-        self.git_ops = GitOps(self.work_dir)
+        self.git_ops = GitOps(self.work_dir, github_token=self.github_token)
         
         # Capture git state before Claude runs
         before_commit = self.git_ops.get_latest_commit_hash()
@@ -222,7 +222,7 @@ class Orchestrator:
         if not self.work_dir:
             return
         
-        self.git_ops = GitOps(self.work_dir)
+        self.git_ops = GitOps(self.work_dir, github_token=self.github_token)
         
         if self.git_ops.has_uncommitted_changes():
             print("WARNING: Uncommitted changes detected")

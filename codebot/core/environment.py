@@ -6,7 +6,13 @@ from pathlib import Path
 from typing import Optional, Tuple
 
 from codebot.core.models import TaskPrompt
-from codebot.core.utils import generate_branch_name, generate_directory_name, generate_short_uuid, get_git_env
+from codebot.core.utils import (
+    generate_branch_name, 
+    generate_directory_name, 
+    generate_short_uuid, 
+    get_git_env,
+    is_github_url
+)
 
 
 class EnvironmentManager:
@@ -139,21 +145,41 @@ class EnvironmentManager:
         
         print("Workspace updated successfully")
     
+    def _create_authenticated_url(self, repo_url: str) -> str:
+        """
+        Create authenticated URL for GitHub repository.
+        
+        Args:
+            repo_url: Original repository URL
+            
+        Returns:
+            Authenticated URL with embedded token
+        """
+        from urllib.parse import urlparse
+        
+        parsed = urlparse(repo_url)
+        if not parsed.netloc:
+            return repo_url
+        
+        # Extract repo path
+        path = parsed.path
+        if path.endswith(".git"):
+            path = path[:-4]
+        if not path.endswith(".git"):
+            path += ".git"
+        
+        # Build authenticated URL using oauth2 format (more secure than username:token)
+        auth_url = f"https://oauth2:{self.github_token}@{parsed.netloc}{path}"
+        return auth_url
+    
     def _clone_repository(self) -> None:
         """Clone the repository into the work directory."""
         # Prepare repository URL with authentication if token is available
         repo_url = self.task.repository_url
         
-        if self.github_token and repo_url.startswith("https://github.com/"):
-            # Extract the repository path from the URL
-            if repo_url.endswith(".git"):
-                repo_path = repo_url[19:-4]  # Remove "https://github.com/" and ".git"
-            else:
-                repo_path = repo_url[19:]  # Remove "https://github.com/"
-            
-            # Create authenticated URL using oauth2 format (more secure than username:token)
-            repo_url = f"https://oauth2:{self.github_token}@github.com/{repo_path}.git"
-            print(f"Cloning repository with authentication: https://github.com/{repo_path}")
+        if self.github_token and is_github_url(repo_url):
+            repo_url = self._create_authenticated_url(repo_url)
+            print(f"Cloning repository with authentication")
         else:
             print(f"Cloning repository: {repo_url}")
         
@@ -184,20 +210,23 @@ class EnvironmentManager:
                 raise RuntimeError(f"Failed to clone repository: {result.stderr}")
         
         # After successful clone, reset remote URL to remove embedded credentials for security
-        if self.github_token and repo_url.startswith("https://oauth2:"):
+        if self.github_token and is_github_url(repo_url):
             self._reset_remote_url()
     
     def _reset_remote_url(self) -> None:
         """Reset remote URL to remove embedded credentials for security."""
-        # Extract the clean repository path
-        repo_path = self.task.repository_url
-        if repo_path.endswith(".git"):
-            repo_path = repo_path[19:-4]  # Remove "https://github.com/" and ".git"
-        else:
-            repo_path = repo_path[19:]  # Remove "https://github.com/"
+        from urllib.parse import urlparse
         
-        # Set clean remote URL without credentials
-        clean_url = f"https://github.com/{repo_path}.git"
+        # Extract the clean repository URL
+        original_url = self.task.repository_url
+        parsed = urlparse(original_url)
+        
+        # Build clean URL without credentials
+        path = parsed.path
+        if not path.endswith(".git"):
+            path += ".git"
+        
+        clean_url = f"https://{parsed.netloc}{path}"
         
         env = get_git_env()
         result = subprocess.run(

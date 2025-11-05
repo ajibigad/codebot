@@ -93,9 +93,35 @@ def run(
     # Validate GitHub token if available
     if effective_token:
         print("Validating GitHub token...")
-        if not validate_github_token(effective_token):
+        if verbose:
+            print("Debug information:")
+            # Show environment variables that affect GitHub API detection
+            github_api_url = os.getenv("GITHUB_API_URL")
+            github_enterprise_url = os.getenv("GITHUB_ENTERPRISE_URL")
+            if github_api_url:
+                print(f"  → GITHUB_API_URL: {github_api_url}")
+            if github_enterprise_url:
+                print(f"  → GITHUB_ENTERPRISE_URL: {github_enterprise_url}")
+            if not github_api_url and not github_enterprise_url:
+                print("  → No GitHub Enterprise environment variables set, using github.com")
+            print(f"  → Repository URL from task: {task.repository_url}")
+        
+        if not validate_github_token(effective_token, repository_url=task.repository_url, verbose=verbose):
             click.echo("Error: Invalid GitHub token. Please check your token and try again.", err=True)
             click.echo("Make sure your token has the correct permissions (repo access for private repos).", err=True)
+            click.echo("", err=True)
+            click.echo("Troubleshooting tips:", err=True)
+            click.echo("1. Verify your token hasn't expired", err=True)
+            click.echo("2. Check that your token has 'repo' scope for private repositories", err=True)
+            click.echo("3. For GitHub Enterprise, ensure you're using the enterprise token", err=True)
+            
+            # Show the correct API URL for manual testing
+            from codebot.core.utils import detect_github_api_url
+            api_url = detect_github_api_url(repository_url=task.repository_url)
+            click.echo(f"4. Test your token manually: curl -H 'Authorization: token YOUR_TOKEN' {api_url}/user", err=True)
+            
+            if verbose:
+                click.echo("5. Run with --verbose flag for detailed debugging information", err=True)
             sys.exit(1)
         print("GitHub token validated successfully")
     else:

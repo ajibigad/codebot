@@ -214,28 +214,7 @@ See the [Examples Guide](examples.md) for more practical use cases.
 
 ## Troubleshooting
 
-### Task fails with "Invalid GitHub token"
-
-Ensure your `GITHUB_TOKEN` is set and has the correct permissions. See [Configuration Guide](configuration.md).
-
-### Claude Code CLI not found
-
-Verify Claude Code CLI is installed:
-
-```bash
-claude --version
-```
-
-### Changes not committed
-
-Claude Code CLI should commit automatically. Check the task description is clear and actionable.
-
-### PR creation fails
-
-Verify:
-- GitHub token has `repo` or `pull_requests: write` permission
-- Repository URL is correct
-- You have push access to the repository
+For CLI issues, task failures, and other problems, see the [Troubleshooting Guide](troubleshooting.md).
 
 ## Next Steps
 
