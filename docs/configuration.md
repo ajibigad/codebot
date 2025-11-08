@@ -156,13 +156,6 @@ Additional requirements:
 3. Select required scopes
 4. Copy token and store securely
 
-**Security Tips:**
-- Never commit tokens to code
-- Use environment variables or `.env` files
-- Rotate tokens periodically
-- Use fine-grained tokens when possible
-- Limit token scope to specific repositories
-
 ## Workspace Configuration
 
 ### Work Directory Structure
@@ -205,35 +198,6 @@ codebot serve --port 8000 --workers 4
 # Enable auto-reload and detailed errors
 codebot serve --port 5000 --debug
 ```
-
-## Security Best Practices
-
-1. **Protect API Keys**
-   - Use strong, random keys
-   - Store in environment variables
-   - Never log or expose in responses
-
-2. **Secure Webhook Secret**
-   - Use cryptographically random string
-   - Match exactly in GitHub webhook config
-   - Rotate periodically
-
-3. **GitHub Token Security**
-   - Use fine-grained tokens when possible
-   - Limit to specific repositories
-   - Set expiration dates
-   - Revoke if compromised
-
-4. **Network Security**
-   - Use HTTPS in production
-   - Configure firewall rules
-   - Use reverse proxy (nginx, caddy)
-   - Enable rate limiting
-
-5. **Workspace Isolation**
-   - Use dedicated work directory
-   - Clean up old workspaces
-   - Set appropriate file permissions
 
 ## Troubleshooting
 
