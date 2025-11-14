@@ -37,3 +37,4 @@ class Task:
     result: Optional[dict] = None
     error: Optional[str] = None
     subtasks: List["Task"] = field(default_factory=list)
+    logs: Optional[List[dict]] = None

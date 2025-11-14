@@ -12,6 +12,7 @@ from codebot.core.github_app import GitHubAppAuth
 from codebot.core.git_ops import GitOps
 from codebot.core.github_pr import GitHubPR
 from codebot.core.models import TaskPrompt
+from codebot.server.log_capture import LogCapture, get_log_storage
 
 
 class Orchestrator:
@@ -22,6 +23,7 @@ class Orchestrator:
         task: TaskPrompt,
         work_base_dir: Path,
         github_app_auth: Optional[GitHubAppAuth] = None,
+        log_capture: Optional[LogCapture] = None,
     ):
         """
         Initialize the orchestrator.
@@ -30,6 +32,7 @@ class Orchestrator:
             task: Task prompt with repository and task details
             work_base_dir: Base directory for creating work spaces
             github_app_auth: Optional GitHub App authentication instance (created if not provided)
+            log_capture: Optional log capture instance for codebot logs
         """
         self.task = task
         self.work_base_dir = work_base_dir
@@ -38,6 +41,7 @@ class Orchestrator:
             github_app_auth = GitHubAppAuth()
         
         self.github_app_auth = github_app_auth
+        self.log_capture = log_capture
         
         self.env_manager: Optional[EnvironmentManager] = None
         self.claude_runner: Optional[ClaudeRunner] = None
@@ -49,6 +53,14 @@ class Orchestrator:
     
     def run(self) -> None:
         """Run the complete codebot workflow."""
+        if self.log_capture:
+            with self.log_capture:
+                self._run_internal()
+        else:
+            self._run_internal()
+    
+    def _run_internal(self) -> None:
+        """Internal run method."""
         try:
             print("=" * 60)
             print("Codebot: Starting task execution")
@@ -115,7 +127,20 @@ class Orchestrator:
         if not self.work_dir:
             return
         
-        self.claude_runner = ClaudeRunner(self.work_dir, github_app_auth=self.github_app_auth)
+        claude_log_capture = None
+        if self.log_capture:
+            log_storage = get_log_storage()
+            claude_log_capture = LogCapture(
+                log_storage,
+                self.log_capture.task_id,
+                "claude"
+            )
+        
+        self.claude_runner = ClaudeRunner(
+            self.work_dir,
+            github_app_auth=self.github_app_auth,
+            log_capture=claude_log_capture,
+        )
         self.git_ops = GitOps(self.work_dir, github_app_auth=self.github_app_auth)
         
         before_commit = self.git_ops.get_latest_commit_hash()

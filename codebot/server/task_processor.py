@@ -3,11 +3,12 @@
 import threading
 from datetime import datetime
 from pathlib import Path
-from queue import Empty
 from typing import Optional
 
 from codebot.core.github_app import GitHubAppAuth
 from codebot.core.orchestrator import Orchestrator
+from codebot.core.task_store import global_task_store
+from codebot.server.log_capture import LogCapture, get_log_storage
 from codebot.server.task_queue import TaskQueue
 
 
@@ -100,11 +101,15 @@ class TaskProcessor:
             started_at=datetime.utcnow()
         )
         
+        log_storage = get_log_storage(storage=global_task_store.storage)
+        log_capture = LogCapture(log_storage, task_id, "codebot")
+        
         try:
             orchestrator = Orchestrator(
                 task=task.prompt,
                 work_base_dir=self.workspace_base_dir,
                 github_app_auth=self.github_app_auth,
+                log_capture=log_capture,
             )
             
             print(f"Executing task {task_id}...")
@@ -116,9 +121,12 @@ class TaskProcessor:
                 "work_dir": str(orchestrator.work_dir) if orchestrator.work_dir else None,
             }
             
+            final_status = "pending_review"
+            log_storage.persist_logs(task_id)
+            
             self.task_queue.update_status(
                 task_id,
-                status="pending_review",
+                status=final_status,
                 completed_at=None,
                 result=result
             )
@@ -127,6 +135,8 @@ class TaskProcessor:
             
         except Exception as e:
             print(f"ERROR: Task {task_id} failed: {e}")
+            
+            log_storage.persist_logs(task_id)
             
             self.task_queue.update_status(
                 task_id,

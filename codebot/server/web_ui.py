@@ -1,14 +1,16 @@
 """Web UI routes for task management."""
 
+import json
 import uuid
 from datetime import datetime
 
 import requests
-from flask import Blueprint, render_template, jsonify, request, current_app
+from flask import Blueprint, Response, render_template, jsonify, request, current_app, stream_with_context
 
 from codebot.core.models import Task, TaskPrompt
 from codebot.core.task_store import global_task_store
 from codebot.server.auth import require_basic_auth, require_auth
+from codebot.server.log_capture import get_log_storage
 
 
 def create_web_ui_blueprint() -> Blueprint:
@@ -293,6 +295,90 @@ def create_web_ui_blueprint() -> Blueprint:
                 "error": "Internal Server Error",
                 "message": str(e)
             }), 500
+    
+    @web_ui.route("/api/web/tasks/<task_id>/logs", methods=["GET"])
+    @require_basic_auth
+    def stream_logs(task_id: str):
+        """Stream logs for a task using Server-Sent Events."""
+        task = global_task_store.get_task(task_id)
+        
+        if not task:
+            return jsonify({
+                "error": "Not Found",
+                "message": f"Task {task_id} not found"
+            }), 404
+        
+        source_filter = request.args.get("source")
+        
+        def generate():
+            import time
+            log_storage = get_log_storage(storage=global_task_store.storage)
+            last_index = 0
+            
+            if task.status == "running":
+                while True:
+                    logs = log_storage.get_logs(task_id, source_filter=source_filter)
+                    if len(logs) > last_index:
+                        for log_entry in logs[last_index:]:
+                            yield f"data: {json.dumps(log_entry)}\n\n"
+                        last_index = len(logs)
+                    
+                    current_task = global_task_store.get_task(task_id)
+                    if not current_task or current_task.status != "running":
+                        break
+                    
+                    time.sleep(0.5)
+            else:
+                if task.logs:
+                    logs = task.logs
+                    if source_filter:
+                        logs = [log for log in logs if log.get("source") == source_filter]
+                    for log_entry in logs:
+                        yield f"data: {json.dumps(log_entry)}\n\n"
+                else:
+                    logs = log_storage.get_logs(task_id, source_filter=source_filter)
+                    for log_entry in logs:
+                        yield f"data: {json.dumps(log_entry)}\n\n"
+            
+            yield "data: {\"type\": \"done\"}\n\n"
+        
+        return Response(
+            stream_with_context(generate()),
+            mimetype="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+            }
+        )
+    
+    @web_ui.route("/api/web/tasks/<task_id>/logs/history", methods=["GET"])
+    @require_basic_auth
+    def get_log_history(task_id: str):
+        """Get all logs for a completed task."""
+        task = global_task_store.get_task(task_id)
+        
+        if not task:
+            return jsonify({
+                "error": "Not Found",
+                "message": f"Task {task_id} not found"
+            }), 404
+        
+        source_filter = request.args.get("source")
+        
+        if task.logs:
+            logs = task.logs
+        else:
+            log_storage = get_log_storage(storage=global_task_store.storage)
+            logs = log_storage.get_logs(task_id, source_filter=source_filter)
+        
+        if source_filter:
+            logs = [log for log in logs if log.get("source") == source_filter]
+        
+        return jsonify({
+            "task_id": task_id,
+            "logs": logs,
+            "count": len(logs)
+        }), 200
     
     return web_ui
 
