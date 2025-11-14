@@ -6,7 +6,7 @@ from typing import Optional
 from urllib.parse import urlparse
 
 from codebot.core.github_app import GitHubAppAuth
-from codebot.core.utils import get_git_env, is_github_url
+from codebot.core.utils import get_codebot_git_author_info, get_git_env, is_github_url
 
 
 class GitOps:
@@ -388,4 +388,206 @@ class GitOps:
             if self.github_app_auth and original_url:
                 print("Restoring clean remote URL...")
                 self._set_remote_url(original_url)
+    
+    @staticmethod
+    def clone_repository(repo_url: str, target_dir: Path, github_app_auth: Optional[GitHubAppAuth] = None) -> None:
+        """
+        Clone a repository into the target directory with optional authentication.
+        
+        Args:
+            repo_url: Repository URL to clone
+            target_dir: Target directory to clone into
+            github_app_auth: Optional GitHub App authentication instance
+        """
+        auth_repo_url = repo_url
+        
+        if github_app_auth and is_github_url(repo_url):
+            temp_git_ops = GitOps(target_dir, github_app_auth)
+            auth_repo_url = temp_git_ops._create_authenticated_url(repo_url)
+            print(f"Cloning repository with authentication")
+        else:
+            print(f"Cloning repository: {repo_url}")
+        
+        env = get_git_env()
+        
+        result = subprocess.run(
+            ["git", "clone", auth_repo_url, str(target_dir)],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        
+        if result.returncode != 0:
+            error_msg = result.stderr.lower()
+            if "authentication failed" in error_msg or "401" in error_msg:
+                raise RuntimeError(
+                    f"Authentication failed. Please check your GitHub App configuration and permissions.\n"
+                    f"Error: {result.stderr}"
+                )
+            elif "not found" in error_msg or "404" in error_msg:
+                raise RuntimeError(
+                    f"Repository not found or access denied. Please check the repository URL and GitHub App permissions.\n"
+                    f"Error: {result.stderr}"
+                )
+            else:
+                raise RuntimeError(f"Failed to clone repository: {result.stderr}")
+        
+        if github_app_auth and is_github_url(repo_url):
+            git_ops = GitOps(target_dir, github_app_auth)
+            git_ops.reset_remote_url(repo_url)
+    
+    def reset_remote_url(self, clean_url: str) -> None:
+        """
+        Reset remote URL to clean format (remove embedded credentials).
+        
+        Args:
+            clean_url: Clean repository URL without credentials
+        """
+        parsed = urlparse(clean_url)
+        
+        path = parsed.path
+        if not path.endswith(".git"):
+            path += ".git"
+        
+        clean_remote_url = f"https://{parsed.netloc}{path}"
+        
+        env = self._get_git_env()
+        result = subprocess.run(
+            ["git", "remote", "set-url", "origin", clean_remote_url],
+            cwd=self.work_dir,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        
+        if result.returncode != 0:
+            print(f"Warning: Failed to reset remote URL: {result.stderr}")
+        else:
+            print(f"Reset remote URL to clean format: {clean_remote_url}")
+    
+    def detect_default_branch(self) -> str:
+        """
+        Detect the default branch of the repository.
+        
+        Returns:
+            Name of the default branch (main or master)
+        """
+        env = self._get_git_env()
+        
+        result = subprocess.run(
+            ["git", "remote", "show", "origin"],
+            cwd=self.work_dir,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        
+        if result.returncode == 0:
+            for line in result.stdout.split("\n"):
+                if "HEAD branch:" in line:
+                    return line.split("HEAD branch:")[1].strip()
+        
+        result = subprocess.run(
+            ["git", "branch", "-r"],
+            cwd=self.work_dir,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        
+        if result.returncode == 0:
+            branches = result.stdout
+            if "main" in branches:
+                return "main"
+            elif "master" in branches:
+                return "master"
+        
+        return "main"
+    
+    def checkout_branch(self, branch_name: str) -> None:
+        """
+        Checkout the specified branch.
+        
+        Args:
+            branch_name: Name of the branch to checkout
+        """
+        env = self._get_git_env()
+        
+        result = subprocess.run(
+            ["git", "checkout", branch_name],
+            cwd=self.work_dir,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"Failed to checkout branch {branch_name}: {result.stderr}"
+            )
+    
+    def create_branch(self, branch_name: str) -> None:
+        """
+        Create and checkout a new branch.
+        
+        Args:
+            branch_name: Name of the branch to create
+        """
+        env = self._get_git_env()
+        
+        result = subprocess.run(
+            ["git", "checkout", "-b", branch_name],
+            cwd=self.work_dir,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"Failed to create branch {branch_name}: {result.stderr}"
+            )
+    
+    def configure_git_author(self) -> None:
+        """Configure git author and committer information for codebot."""
+        if not self.github_app_auth or not self.work_dir:
+            return
+        
+        bot_user_id = self.github_app_auth.bot_user_id
+        if not bot_user_id:
+            app_id = self.github_app_auth.app_id
+            if app_id:
+                print(f"Warning: Could not retrieve bot user ID, using app ID as fallback: {app_id}")
+                bot_user_id = app_id
+            else:
+                return
+        
+        bot_name = self.github_app_auth.get_bot_login()
+        api_url = self.github_app_auth.api_url
+        author_info = get_codebot_git_author_info(bot_user_id, bot_name, api_url)
+        env = self._get_git_env()
+        
+        result = subprocess.run(
+            ["git", "config", "user.name", author_info["author_name"]],
+            cwd=self.work_dir,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        
+        if result.returncode != 0:
+            print(f"Warning: Failed to set git user.name: {result.stderr}")
+        
+        result = subprocess.run(
+            ["git", "config", "user.email", author_info["author_email"]],
+            cwd=self.work_dir,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        
+        if result.returncode != 0:
+            print(f"Warning: Failed to set git user.email: {result.stderr}")
+        else:
+            print(f"Configured git author: {author_info['author_name']} <{author_info['author_email']}>")
 
