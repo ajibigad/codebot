@@ -40,9 +40,17 @@ class SQLiteTaskStorage(TaskStorage):
                 error TEXT,
                 prompt_json TEXT NOT NULL,
                 result_json TEXT,
-                subtasks TEXT
+                subtasks TEXT,
+                logs_json TEXT
             )
         """)
+        
+        try:
+            cursor.execute("""
+                ALTER TABLE tasks ADD COLUMN logs_json TEXT
+            """)
+        except sqlite3.OperationalError:
+            pass
         
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_status ON tasks(status)
@@ -138,8 +146,8 @@ class SQLiteTaskStorage(TaskStorage):
         cursor.execute("""
             INSERT OR REPLACE INTO tasks (
                 id, status, source, submitted_at, started_at, completed_at,
-                error, prompt_json, result_json, subtasks
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                error, prompt_json, result_json, subtasks, logs_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             task.id,
             task.status,
@@ -151,6 +159,7 @@ class SQLiteTaskStorage(TaskStorage):
             self._serialize_prompt(task.prompt),
             json.dumps(task.result) if task.result else None,
             json.dumps(subtask_ids) if subtask_ids else None,
+            json.dumps(task.logs) if task.logs else None,
         ))
         
         self.conn.commit()
@@ -176,6 +185,13 @@ class SQLiteTaskStorage(TaskStorage):
         prompt = self._deserialize_prompt(row["prompt_json"])
         result = json.loads(row["result_json"]) if row["result_json"] else None
         
+        try:
+            logs_json = row["logs_json"]
+            logs = json.loads(logs_json) if logs_json else None
+        except (KeyError, IndexError):
+            print(f"Error loading logs for task {row['id']}")
+            logs = None
+        
         return Task(
             id=row["id"],
             prompt=prompt,
@@ -187,6 +203,7 @@ class SQLiteTaskStorage(TaskStorage):
             result=result,
             error=row["error"],
             subtasks=[],  # Will be loaded separately
+            logs=logs,
         )
     
     def update_task(
@@ -235,6 +252,53 @@ class SQLiteTaskStorage(TaskStorage):
         values.append(task_id)
         query = f"UPDATE tasks SET {', '.join(updates)} WHERE id = ?"
         cursor.execute(query, values)
+        self.conn.commit()
+    
+    def update_task_logs(self, task_id: str, logs: List[dict]) -> None:
+        """
+        Update task logs.
+        
+        Args:
+            task_id: Task ID
+            logs: List of log entries
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            UPDATE tasks SET logs_json = ? WHERE id = ?
+        """, (json.dumps(logs), task_id))
+        self.conn.commit()
+    
+    def cleanup_old_logs(self, cutoff_date: datetime) -> None:
+        """
+        Clean up old logs from database.
+        
+        Args:
+            cutoff_date: Cutoff date - logs older than this will be removed
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT id, logs_json FROM tasks WHERE logs_json IS NOT NULL")
+        rows = cursor.fetchall()
+        
+        cutoff_iso = cutoff_date.isoformat()
+        
+        for row in rows:
+            try:
+                logs = json.loads(row["logs_json"])
+                if not logs:
+                    continue
+                
+                filtered_logs = [
+                    log for log in logs
+                    if log.get("timestamp", "") >= cutoff_iso
+                ]
+                
+                if len(filtered_logs) < len(logs):
+                    cursor.execute("""
+                        UPDATE tasks SET logs_json = ? WHERE id = ?
+                    """, (json.dumps(filtered_logs) if filtered_logs else None, row["id"]))
+            except (json.JSONDecodeError, TypeError, KeyError):
+                continue
+        
         self.conn.commit()
     
     def list_tasks(

@@ -7,21 +7,29 @@ from typing import Optional
 
 from codebot.core.github_app import GitHubAppAuth
 from codebot.core.utils import get_codebot_git_author_info, get_git_env
+from codebot.server.log_capture import LogCapture
 
 
 class ClaudeRunner:
     """Runner for Claude Code CLI in headless mode."""
     
-    def __init__(self, work_dir: Path, github_app_auth: Optional[GitHubAppAuth] = None):
+    def __init__(
+        self,
+        work_dir: Path,
+        github_app_auth: Optional[GitHubAppAuth] = None,
+        log_capture: Optional[LogCapture] = None,
+    ):
         """
         Initialize the Claude runner.
         
         Args:
             work_dir: Working directory where Claude Code should run
             github_app_auth: Optional GitHub App authentication instance
+            log_capture: Optional log capture instance for streaming logs
         """
         self.work_dir = work_dir
         self.github_app_auth = github_app_auth
+        self.log_capture = log_capture
         self._check_claude_installed()
     
     def _check_claude_installed(self) -> None:
@@ -115,15 +123,45 @@ class ClaudeRunner:
         
         git_env = self._get_git_env()
         
-        result = subprocess.run(
-            cmd,
-            cwd=self.work_dir,
-            capture_output=True,
-            text=True,
-            env=git_env,
-        )
+        if self.log_capture:
+            process = subprocess.Popen(
+                cmd,
+                cwd=self.work_dir,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                env=git_env,
+                bufsize=1,
+            )
+            
+            while True:
+                output = process.stdout.readline()
+                if output == '' and process.poll() is not None:
+                    break
+                if output:
+                    line = output.rstrip('\n\r')
+                    if line:
+                        print(line)
+                        if self.log_capture:
+                            self.log_capture.write(line)
+            
+            return_code = process.poll()
+            result = subprocess.CompletedProcess(
+                cmd,
+                return_code,
+                stdout="",
+                stderr="",
+            )
+        else:
+            result = subprocess.run(
+                cmd,
+                cwd=self.work_dir,
+                capture_output=True,
+                text=True,
+                env=git_env,
+            )
+            print(result.stdout)
         
-        print(result.stdout)
         print("=" * 80)
         return result
     

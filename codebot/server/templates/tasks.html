@@ -497,7 +497,36 @@
                     ${resultHtml}
                     ${errorHtml}
                     ${subtasksHtml}
+                    <div class="mt-4">
+                        <h6>Logs</h6>
+                        <ul class="nav nav-tabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="codebot-logs-tab" data-bs-toggle="tab" data-bs-target="#codebot-logs" type="button" role="tab">Codebot Logs</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="claude-logs-tab" data-bs-toggle="tab" data-bs-target="#claude-logs" type="button" role="tab">Claude Logs</button>
+                            </li>
+                        </ul>
+                        <div class="tab-content border border-top-0 p-3" style="max-height: 400px; overflow-y: auto; background-color: #1e1e1e; color: #d4d4d4; font-family: 'Courier New', monospace; font-size: 0.875rem;">
+                            <div class="tab-pane fade show active" id="codebot-logs" role="tabpanel">
+                                <div id="codebot-logs-content" class="log-content"></div>
+                            </div>
+                            <div class="tab-pane fade" id="claude-logs" role="tabpanel">
+                                <div id="claude-logs-content" class="log-content"></div>
+                            </div>
+                        </div>
+                        <div class="mt-2 d-flex justify-content-between align-items-center">
+                            <small class="text-muted" id="logs-status">Loading logs...</small>
+                            <div>
+                                <button class="btn btn-sm btn-outline-secondary" id="toggle-autoscroll-btn">Pause Auto-scroll</button>
+                                <button class="btn btn-sm btn-outline-secondary ms-1" id="copy-logs-btn">Copy Logs</button>
+                                <button class="btn btn-sm btn-outline-secondary ms-1" id="clear-logs-btn">Clear</button>
+                            </div>
+                        </div>
+                    </div>
                 `;
+                
+                initializeLogs(task.id, task.status);
                 
                 detailsDiv.querySelectorAll('.view-subtask-btn').forEach(btn => {
                     btn.addEventListener('click', (e) => {
@@ -812,6 +841,273 @@
 
         loadRepositories();
         startRepositoryRefresh();
+
+        let logEventSource = null;
+        let autoScrollEnabled = true;
+        let currentTaskId = null;
+
+        function initializeLogs(taskId, taskStatus) {
+            currentTaskId = taskId;
+            autoScrollEnabled = true;
+            
+            if (logEventSource) {
+                logEventSource.close();
+            }
+
+            const codebotContent = document.getElementById('codebot-logs-content');
+            const claudeContent = document.getElementById('claude-logs-content');
+            const logsStatus = document.getElementById('logs-status');
+
+            if (taskStatus === 'pending') {
+                codebotContent.innerHTML = '<span class="text-muted">No logs available yet. Task is pending.</span>';
+                claudeContent.innerHTML = '<span class="text-muted">No logs available yet. Task is pending.</span>';
+                logsStatus.textContent = 'No logs available';
+                return;
+            }
+
+            const toggleBtn = document.getElementById('toggle-autoscroll-btn');
+            const copyBtn = document.getElementById('copy-logs-btn');
+            const clearBtn = document.getElementById('clear-logs-btn');
+            
+            toggleBtn.replaceWith(toggleBtn.cloneNode(true));
+            copyBtn.replaceWith(copyBtn.cloneNode(true));
+            clearBtn.replaceWith(clearBtn.cloneNode(true));
+            
+            const newToggleBtn = document.getElementById('toggle-autoscroll-btn');
+            const newCopyBtn = document.getElementById('copy-logs-btn');
+            const newClearBtn = document.getElementById('clear-logs-btn');
+            
+            newToggleBtn.addEventListener('click', () => {
+                autoScrollEnabled = !autoScrollEnabled;
+                newToggleBtn.textContent = 
+                    autoScrollEnabled ? 'Pause Auto-scroll' : 'Resume Auto-scroll';
+                
+                if (autoScrollEnabled && taskStatus === 'running') {
+                    const tabContent = document.querySelector('.tab-content[style*="overflow-y"]');
+                    if (tabContent && tabContent.scrollHeight > tabContent.clientHeight) {
+                        tabContent.scrollTop = tabContent.scrollHeight;
+                    }
+                }
+            });
+
+            newCopyBtn.addEventListener('click', () => {
+                copyLogsToClipboard();
+            });
+
+            newClearBtn.addEventListener('click', () => {
+                codebotContent.innerHTML = '';
+                claudeContent.innerHTML = '';
+            });
+
+            const codebotTab = document.getElementById('codebot-logs-tab');
+            const claudeTab = document.getElementById('claude-logs-tab');
+            
+            const scrollActiveTabToBottom = () => {
+                if (taskStatus !== 'running') {
+                    return;
+                }
+                
+                const tabContent = document.querySelector('.tab-content[style*="overflow-y"]');
+                if (tabContent && tabContent.scrollHeight > tabContent.clientHeight) {
+                    tabContent.scrollTop = tabContent.scrollHeight;
+                }
+            };
+            
+            if (taskStatus === 'running') {
+                codebotTab.addEventListener('shown.bs.tab', () => {
+                    setTimeout(scrollActiveTabToBottom, 50);
+                });
+                claudeTab.addEventListener('shown.bs.tab', () => {
+                    setTimeout(scrollActiveTabToBottom, 50);
+                });
+                
+                logsStatus.textContent = 'Streaming logs...';
+                startLogStream(taskId, 'codebot', codebotContent);
+                startLogStream(taskId, 'claude', claudeContent);
+            } else {
+                logsStatus.textContent = 'Loading logs...';
+                loadLogHistory(taskId, 'codebot', codebotContent);
+                loadLogHistory(taskId, 'claude', claudeContent);
+            }
+        }
+
+        function startLogStream(taskId, source, contentDiv) {
+            const url = `/api/web/tasks/${encodeURIComponent(taskId)}/logs?source=${source}`;
+            const eventSource = new EventSource(url);
+            
+            eventSource.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'done') {
+                        eventSource.close();
+                        if (logEventSource && Array.isArray(logEventSource)) {
+                            const index = logEventSource.indexOf(eventSource);
+                            if (index > -1) {
+                                logEventSource.splice(index, 1);
+                            }
+                        }
+                        if (!logEventSource || (Array.isArray(logEventSource) && logEventSource.length === 0)) {
+                            document.getElementById('logs-status').textContent = 'Logs complete';
+                        }
+                        return;
+                    }
+                    
+                    appendLogEntry(contentDiv, data);
+                } catch (e) {
+                    console.error('Error parsing log entry:', e);
+                }
+            };
+
+            eventSource.onerror = (error) => {
+                console.error('SSE error:', error);
+                eventSource.close();
+                if (logEventSource && Array.isArray(logEventSource)) {
+                    const index = logEventSource.indexOf(eventSource);
+                    if (index > -1) {
+                        logEventSource.splice(index, 1);
+                    }
+                }
+                if (!logEventSource || (Array.isArray(logEventSource) && logEventSource.length === 0)) {
+                    document.getElementById('logs-status').textContent = 'Log streaming ended';
+                }
+            };
+            
+            if (!logEventSource) {
+                logEventSource = [];
+            }
+            logEventSource.push(eventSource);
+        }
+
+        function loadLogHistory(taskId, source, contentDiv) {
+            fetch(`/api/web/tasks/${encodeURIComponent(taskId)}/logs/history?source=${source}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.logs && data.logs.length > 0) {
+                        data.logs.forEach(logEntry => {
+                            appendLogEntry(contentDiv, logEntry, false);
+                        });
+                        document.getElementById('logs-status').textContent = `Loaded ${data.count} log entries`;
+                    } else {
+                        contentDiv.innerHTML = '<span class="text-muted">No logs available</span>';
+                        document.getElementById('logs-status').textContent = 'No logs available';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading log history:', error);
+                    contentDiv.innerHTML = '<span class="text-danger">Error loading logs</span>';
+                    document.getElementById('logs-status').textContent = 'Error loading logs';
+                });
+        }
+
+        function appendLogEntry(contentDiv, logEntry, scroll = true) {
+            const timestamp = logEntry.timestamp ? new Date(logEntry.timestamp).toLocaleTimeString() : '';
+            const message = escapeHtml(logEntry.message || '');
+            const source = logEntry.source || 'unknown';
+            
+            const logLine = document.createElement('div');
+            logLine.className = 'log-line mb-1';
+            logLine.setAttribute('data-timestamp', logEntry.timestamp || '');
+            logLine.setAttribute('data-source', source);
+            logLine.setAttribute('data-message', logEntry.message || '');
+            logLine.innerHTML = `<span style="color: #858585;">[${timestamp}]</span> <span class="text-info">[${source}]</span> ${message}`;
+            
+            contentDiv.appendChild(logLine);
+            
+            if (scroll && autoScrollEnabled) {
+                const tabContent = contentDiv.closest('.tab-content');
+                if (tabContent) {
+                    requestAnimationFrame(() => {
+                        tabContent.scrollTop = tabContent.scrollHeight;
+                    });
+                }
+            }
+        }
+
+        function copyLogsToClipboard() {
+            const codebotTab = document.getElementById('codebot-logs-tab');
+            const claudeTab = document.getElementById('claude-logs-tab');
+            const codebotContent = document.getElementById('codebot-logs-content');
+            const claudeContent = document.getElementById('claude-logs-content');
+            
+            const activeTab = codebotTab.classList.contains('active') ? 'codebot' : 'claude';
+            const activeContent = activeTab === 'codebot' ? codebotContent : claudeContent;
+            
+            const logLines = activeContent.querySelectorAll('.log-line');
+            let logText = '';
+            
+            logLines.forEach(line => {
+                const timestamp = line.getAttribute('data-timestamp');
+                const source = line.getAttribute('data-source');
+                const message = line.getAttribute('data-message');
+                
+                if (timestamp) {
+                    const date = new Date(timestamp);
+                    logText += `[${date.toLocaleString()}] [${source}] ${message}\n`;
+                } else {
+                    logText += `[${source}] ${message}\n`;
+                }
+            });
+            
+            if (!logText.trim()) {
+                alert('No logs to copy');
+                return;
+            }
+            
+            navigator.clipboard.writeText(logText).then(() => {
+                const copyBtn = document.getElementById('copy-logs-btn');
+                const originalText = copyBtn.textContent;
+                copyBtn.textContent = 'Copied!';
+                copyBtn.classList.add('btn-success');
+                copyBtn.classList.remove('btn-outline-secondary');
+                
+                setTimeout(() => {
+                    copyBtn.textContent = originalText;
+                    copyBtn.classList.remove('btn-success');
+                    copyBtn.classList.add('btn-outline-secondary');
+                }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy logs:', err);
+                
+                const textarea = document.createElement('textarea');
+                textarea.value = logText;
+                textarea.style.position = 'fixed';
+                textarea.style.opacity = '0';
+                document.body.appendChild(textarea);
+                textarea.select();
+                
+                try {
+                    document.execCommand('copy');
+                    const copyBtn = document.getElementById('copy-logs-btn');
+                    const originalText = copyBtn.textContent;
+                    copyBtn.textContent = 'Copied!';
+                    copyBtn.classList.add('btn-success');
+                    copyBtn.classList.remove('btn-outline-secondary');
+                    
+                    setTimeout(() => {
+                        copyBtn.textContent = originalText;
+                        copyBtn.classList.remove('btn-success');
+                        copyBtn.classList.add('btn-outline-secondary');
+                    }, 2000);
+                } catch (fallbackErr) {
+                    console.error('Fallback copy failed:', fallbackErr);
+                    alert('Failed to copy logs to clipboard');
+                } finally {
+                    document.body.removeChild(textarea);
+                }
+            });
+        }
+
+        document.getElementById('taskModal').addEventListener('hidden.bs.modal', () => {
+            if (logEventSource) {
+                if (Array.isArray(logEventSource)) {
+                    logEventSource.forEach(es => es.close());
+                } else {
+                    logEventSource.close();
+                }
+                logEventSource = null;
+            }
+            currentTaskId = null;
+        });
     </script>
 </body>
 </html>
